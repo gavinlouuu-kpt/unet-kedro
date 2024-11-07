@@ -17,6 +17,8 @@ class SegmentationDataset(Dataset):
     def __init__(self, images: Dict, labels: List[Dict]):
         self.images = images
         self.masks = LabelParser.parse_json(labels)
+        logger.debug(f"self.images type: {type(self.images)}")
+        logger.debug(f"self.images class name: {self.images.__class__.__name__}")
         
         # Extract numbers from keys and create mapping
         def get_number(key: str) -> str:
@@ -67,19 +69,25 @@ class SegmentationDataset(Dataset):
         # Get image and mask keys from the pairs
         image_key, mask_key = self.image_mask_pairs[idx]
         
-        # Debug prints
-        logger.debug(f"Image key: {image_key}")
-        logger.debug(f"Image type: {type(self.images[image_key])}")
-        logger.debug(f"Mask key: {mask_key}")
-        logger.debug(f"Mask type: {type(self.masks[mask_key])}")
-        
-        image = np.asarray(self.images[image_key])
-        mask = np.asarray(self.masks[mask_key])
-        
+        # Get raw data
+        image = self.images[image_key]
+        mask = self.masks[mask_key]
+    
+        # Handle image data
         if callable(image):
-            raise TypeError(f"Image data is a method: {image}")
-        if callable(mask):
-            raise TypeError(f"Mask data is a method: {mask}")
+            logger.debug(f"Calling method to get image data for {image_key}")
+            image = image()
+    
+        # Convert to numpy arrays with explicit dtype
+        try:
+            image = np.asarray(image, dtype=np.float32)
+            mask = np.asarray(mask, dtype=np.float32)
+            
+            logger.debug(f"Image shape: {image.shape}, dtype: {image.dtype}")
+            logger.debug(f"Mask shape: {mask.shape}, dtype: {mask.dtype}")
+        except Exception as e:
+            logger.error(f"Error converting arrays for key {image_key}: {str(e)}")
+            raise
         
         # Convert to torch tensors
         image = torch.FloatTensor(image)
@@ -90,4 +98,25 @@ class SegmentationDataset(Dataset):
 def create_segmentation_dataset(images: Dict, labels: List[Dict]) -> Dataset:
     """Creates a PyTorch Dataset for image segmentation"""
     logger.info(f"Creating segmentation dataset with {len(images)} images and {len(labels)} labels")
-    return SegmentationDataset(images, labels)
+    dataset = SegmentationDataset(images, labels)
+    
+    # Test first item access
+    try:
+        logger.debug("Testing first item access...")
+        image, mask = dataset[0]
+        logger.debug("Successfully loaded first item")
+    except Exception as e:
+        logger.error(f"Error accessing first item: {str(e)}")
+        # Print the first image and mask data
+        image_key, mask_key = dataset.image_mask_pairs[0]
+        logger.debug(f"First image key: {image_key}")
+        logger.debug(f"First image data type: {type(dataset.images[image_key])}")
+        if hasattr(dataset.images[image_key], 'shape'):
+            logger.debug(f"First image shape: {dataset.images[image_key].shape}")
+        logger.debug(f"First mask key: {mask_key}")
+        logger.debug(f"First mask data type: {type(dataset.masks[mask_key])}")
+        if hasattr(dataset.masks[mask_key], 'shape'):
+            logger.debug(f"First mask shape: {dataset.masks[mask_key].shape}")
+        raise
+    
+    return dataset
