@@ -1,0 +1,23 @@
+# in conf/base/catalog.yml
+# In_focus_background:
+#   type: pillow.ImageDataset
+#   filepath: data/01_raw/In_focus/background.tiff
+
+In_focus_partition:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/01_raw/In_focus/
+  filename_suffix: ".tiff"
+
+segmentation_labels:
+  type: json.JSONDataset
+  filepath: data/01_raw/In_focus/In_focus.json
+
+segmentation_dataset:
+  type: pickle.PickleDataset
+  filepath: data/02_intermediate/segmentation_dataset.pkl
+
+trained_unet:
+  type: pickle.PickleDataset
+  filepath: data/06_models/unet_model.pkl
+
