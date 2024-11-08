@@ -1,5 +1,5 @@
 """
-This is a boilerplate test file for pipeline 'label'
+This is a boilerplate test file for pipeline 'data_preprocessing'
 generated using Kedro 0.19.9.
 Please add your pipeline tests here.
 

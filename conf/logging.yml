@@ -27,7 +27,7 @@ loggers:
   kedro:
     level: INFO
   unet.pipelines.label.nodes:
-    level: DEBUG
+    level: INFO
     handlers: [rich, info_file_handler]
     propagate: no
     qualname: unet.pipelines.label.nodes
