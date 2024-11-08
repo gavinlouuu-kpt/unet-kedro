@@ -12,7 +12,7 @@ import logging
 # Get logger for this module
 logger = logging.getLogger(__name__)
 
-
+# TODO: use the label_studio_sdk.converter.brush to decode the rle data
 class SegmentationDataset(Dataset):
     def __init__(self, images: Dict, labels: List[Dict]):
         self.images = images

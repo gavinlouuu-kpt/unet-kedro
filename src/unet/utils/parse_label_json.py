@@ -2,6 +2,8 @@ from typing import List, Dict
 import numpy as np
 import re
 
+# TODO: use the label_studio_sdk.converter.brush to decode the rle data
+
 class LabelParser:
     @staticmethod
     def _get_image_number(filename: str) -> str:
