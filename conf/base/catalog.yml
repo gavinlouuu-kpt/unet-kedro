@@ -44,8 +44,18 @@ cv_processed_in_focus:
   path: data/02_intermediate/cv_processed_images/In_focus/
   filename_suffix: ".tiff"
 
+
+cv_processed_timing_in_focus:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/cv_processed_images/In_focus/cv_processed_timing_in_focus.csv
+
 cv_processed_slight_under:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
   path: data/02_intermediate/cv_processed_images/Slight_under_focus/
   filename_suffix: ".tiff"
+
+cv_processed_timing_slight_under:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/cv_processed_images/Slight_under_focus/cv_processed_timing_slight_under.csv
+

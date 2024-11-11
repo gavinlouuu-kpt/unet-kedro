@@ -12,13 +12,13 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=process_image_partition,
                 inputs=["In_focus_partition", "params:cv_basic_options"],
-                outputs="cv_processed_in_focus",
+                outputs=["cv_processed_in_focus", "cv_processed_timing_in_focus"],
                 name="cv_process_in_focus_images",
             ),
             node(
                 func=process_image_partition,
                 inputs=["Slight_under_focus_partition", "params:cv_basic_options"],
-                outputs="cv_processed_slight_under",
+                outputs=["cv_processed_slight_under", "cv_processed_timing_slight_under"],
                 name="cv_process_slight_under_images",
             ),
         ]
