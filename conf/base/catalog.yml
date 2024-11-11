@@ -9,6 +9,12 @@ In_focus_partition:
   path: data/01_raw/In_focus/
   filename_suffix: ".tiff"
 
+Slight_under_focus_partition:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/01_raw/Slight_under_focus/
+  filename_suffix: ".tiff"
+
 segmentation_labels:
   type: json.JSONDataset
   filepath: data/01_raw/In_focus/In_focus.json
@@ -17,7 +23,29 @@ segmentation_dataset:
   type: pickle.PickleDataset
   filepath: data/02_intermediate/segmentation_dataset.pkl
 
+train_dataset:
+  type: pickle.PickleDataset
+  filepath: data/02_intermediate/train_dataset.pkl
+
+val_dataset:
+  type: pickle.PickleDataset
+  filepath: data/02_intermediate/val_dataset.pkl
+
 trained_unet:
   type: pickle.PickleDataset
   filepath: data/06_models/unet_model.pkl
 
+# Opencv processed images
+# Add these entries to your existing catalog.yml
+
+cv_processed_in_focus:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/02_intermediate/cv_processed_images/In_focus/
+  filename_suffix: ".tiff"
+
+cv_processed_slight_under:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/02_intermediate/cv_processed_images/Slight_under_focus/
+  filename_suffix: ".tiff"
