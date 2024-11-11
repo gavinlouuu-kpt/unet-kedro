@@ -10,7 +10,7 @@ def create_pipeline(**kwargs) -> Pipeline:
     return pipeline([
         node(
             func=split_data,
-            inputs=["segmentation_dataset", "params:split_ratio"],
+            inputs=["segmentation_dataset_in_focus", "params:split_ratio"],
             outputs=["train_dataset", "val_dataset"],
             name="split_data_node"
         )

@@ -15,14 +15,35 @@ Slight_under_focus_partition:
   path: data/01_raw/Slight_under_focus/
   filename_suffix: ".tiff"
 
-segmentation_labels:
+# Segmentation labels
+segmentation_labels_in_focus:
   type: json.JSONDataset
   filepath: data/01_raw/In_focus/In_focus.json
 
-segmentation_dataset:
+segmentation_labels_slight_under:
+  type: json.JSONDataset
+  filepath: data/01_raw/Slight_under_focus/Slight_under_focus.json
+
+# Reconstructed masks
+reconstructed_sam_masks_in_focus:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/02_intermediate/sam_masks/in_focus
+  filename_suffix: ".tiff"
+
+reconstructed_sam_masks_slight_under:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/02_intermediate/sam_masks/slight_under
+  filename_suffix: ".tiff"
+
+# Paired Image to Segmentation dataset
+segmentation_dataset_in_focus:
   type: pickle.PickleDataset
   filepath: data/02_intermediate/segmentation_dataset.pkl
 
+
+# Training datasets
 train_dataset:
   type: pickle.PickleDataset
   filepath: data/02_intermediate/train_dataset.pkl
@@ -44,7 +65,6 @@ cv_processed_in_focus:
   path: data/02_intermediate/cv_processed_images/In_focus/
   filename_suffix: ".tiff"
 
-
 cv_processed_timing_in_focus:
   type: pandas.CSVDataset
   filepath: data/02_intermediate/cv_processed_images/In_focus/cv_processed_timing_in_focus.csv
@@ -58,4 +78,17 @@ cv_processed_slight_under:
 cv_processed_timing_slight_under:
   type: pandas.CSVDataset
   filepath: data/02_intermediate/cv_processed_images/Slight_under_focus/cv_processed_timing_slight_under.csv
+
+# Comparison metrics between SAM and OpenCV
+mask_comparison_metrics:
+  type: pandas.CSVDataset
+  filepath: data/03_primary/mask_comparison_metrics.csv
+  save_args:
+    index: False
+
+mask_comparison_metrics_slight_under:
+  type: pandas.CSVDataset
+  filepath: data/03_primary/mask_comparison_metrics_slight_under.csv
+  save_args:
+    index: False
 
