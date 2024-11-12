@@ -42,7 +42,6 @@ segmentation_dataset_in_focus:
   type: pickle.PickleDataset
   filepath: data/02_intermediate/segmentation_dataset.pkl
 
-
 # Training datasets
 train_dataset:
   type: pickle.PickleDataset
@@ -57,8 +56,6 @@ trained_unet:
   filepath: data/06_models/unet_model.pkl
 
 # Opencv processed images
-# Add these entries to your existing catalog.yml
-
 cv_processed_in_focus:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
@@ -92,3 +89,7 @@ mask_comparison_metrics_slight_under:
   save_args:
     index: False
 
+# SAM Benchmark
+prompt_points_in_focus:
+  type: pickle.PickleDataset
+  filepath: data/02_intermediate/prompt_points_in_focus.pkl

@@ -9,3 +9,11 @@ notebook
 scikit-learn~=1.5.1; python_version >= "3.9"
 scikit-learn<=1.4.0,>=1.0; python_version < "3.9"
 setuptools; python_version >= "3.12"
+# SAM and its dependencies
+git+https://github.com/facebookresearch/segment-anything.git
+torch>=2.0.0
+torchvision>=0.15.0
+# Image processing
+opencv-python>=4.6.0
+# Label Studio SDK
+label-studio-sdk>=1.0.7
