@@ -43,7 +43,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=reconstruct_sam_masks,
                 inputs=["segmentation_labels_in_focus", "general_roi_coordinates"],
-                outputs="reconstructed_sam_masks_in_focus", #filter empty frames
+                outputs="reconstructed_sam_masks_in_focus", 
                 name="reconstruct_sam_masks_in_focus",
             ),
             node(

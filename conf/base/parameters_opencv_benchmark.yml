@@ -9,3 +9,4 @@ cv_basic_options:
   kernel_size: [3, 3]
   blur_size: [3, 3]
   threshold: 10
+
