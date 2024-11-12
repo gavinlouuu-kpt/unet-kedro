@@ -1,11 +1,159 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple, Callable, Any
 import torch
 from torch.utils.data import Dataset
 import numpy as np
 import logging
+from PIL import Image
 from .parse_label_json import LabelParser
+import cv2
+import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+def filter_empty_frames(
+    partition: Dict[str, Callable[[], Any]],
+    parameters: Dict[str, Any],
+    roi: pd.DataFrame
+) -> Dict[str, Callable[[], Any]]:
+    """
+    Filter out frames that are empty within the ROI using the same processing pipeline as the main processing.
+    
+    Args:
+        partition: Dictionary of image load functions
+        parameters: Processing parameters
+        roi: DataFrame containing ROI coordinates (x, y, width, height)
+    """
+    logger.info("Filtering empty frames")
+    logger.info(f"Initial frame count: {len(partition)}")
+    logger.info(f"Parameters: {parameters}")
+    
+    # Extract ROI coordinates
+    x = roi['x'].iloc[0]
+    y = roi['y'].iloc[0]
+    w = roi['width'].iloc[0]
+    h = roi['height'].iloc[0]
+    logger.info(f"Using ROI: x={x}, y={y}, w={w}, h={h}")
+    
+    # Setup
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, parameters["kernel_size"])
+    filtered_partition = {}
+    all_areas = []
+    
+    # Get background image
+    bg_key = next(key for key in partition.keys() if "background" in key.lower())
+    background_pil = partition[bg_key]()
+    background = np.array(background_pil)
+    # Crop background to ROI
+    background = background[y:y+h, x:x+w]
+    filtered_partition[bg_key] = partition[bg_key]  # Keep background image
+    
+    # Process each image
+    for key, load_func in partition.items():
+        if "background" in key.lower():
+            continue
+            
+        # Load and crop image to ROI
+        image_pil = load_func()
+        image = np.array(image_pil)
+        image = image[y:y+h, x:x+w]
+        
+        # Apply same processing as in process_image_partition
+        blurred_bg = cv2.GaussianBlur(background, parameters["blur_size"], 0)
+        blurred = cv2.GaussianBlur(image, parameters["blur_size"], 0)
+        
+        # Background subtraction
+        bg_sub = cv2.subtract(blurred_bg, blurred)
+        
+        # Threshold
+        _, binary = cv2.threshold(bg_sub, parameters["threshold"], 255, cv2.THRESH_BINARY)
+        
+        # Morphological operations
+        dilate1 = cv2.dilate(binary, kernel, iterations=1)
+        erode1 = cv2.erode(dilate1, kernel, iterations=1)
+        erode2 = cv2.erode(erode1, kernel, iterations=1)
+        processed = cv2.dilate(erode2, kernel, iterations=1)
+        
+        # Calculate area of white pixels within ROI
+        white_area = np.sum(processed > 0)
+        all_areas.append(white_area)
+        
+        logger.debug(f"Frame {key}: white area in ROI = {white_area}")
+        
+        # Keep frame if it has sufficient white pixels in ROI
+        if white_area > parameters["minimum_area"]:
+            filtered_partition[key] = load_func
+            logger.debug(f"Keeping frame {key}")
+        else:
+            logger.debug(f"Filtering out frame {key}")
+    
+    # Log statistics about areas
+    if all_areas:
+        logger.info(f"Area statistics within ROI:")
+        logger.info(f"Min area: {min(all_areas)}")
+        logger.info(f"Max area: {max(all_areas)}")
+        logger.info(f"Mean area: {np.mean(all_areas):.2f}")
+        logger.info(f"Median area: {np.median(all_areas):.2f}")
+    
+    logger.info(f"Filtered {len(partition) - len(filtered_partition)} empty frames")
+    logger.info(f"Remaining frames: {len(filtered_partition)}")
+    
+    if len(filtered_partition) <= 1:
+        logger.warning("No frames passed the filtering! Adjusting might be needed.")
+        logger.warning(f"Consider setting minimum_area below the mean area: {np.mean(all_areas):.2f}")
+    
+    return filtered_partition
+
+def _validate_image_shapes(
+    images: Dict[str, Callable[[], Any]], 
+    condition: str,
+    sample_size: int = 5
+) -> Tuple[Dict[str, np.ndarray], tuple]:
+    """
+    Helper function to load images and validate their shapes.
+    
+    Args:
+        images: Dictionary of image load functions
+        condition: Name of the condition for logging (e.g., 'in_focus')
+        sample_size: Number of images to check for shape consistency
+        
+    Returns:
+        Tuple containing:
+        - Dictionary of loaded images as numpy arrays
+        - Reference shape of the images
+        
+    Raises:
+        ValueError: If inconsistent shapes are detected
+    """
+    loaded_images = {}
+    reference_shape = None
+    
+    for i, (key, load_func) in enumerate(images.items()):
+        img = np.array(load_func())
+        loaded_images[key] = img
+        
+        # Shape validation for first n images
+        if i < sample_size:
+            current_shape = img.shape
+            if reference_shape is None:
+                reference_shape = current_shape
+                logger.info(f"{condition} reference shape: {current_shape}")
+            elif current_shape != reference_shape:
+                raise ValueError(
+                    f"Inconsistent shape in {condition} images. "
+                    f"Expected {reference_shape}, "
+                    f"got {current_shape} for image {key}"
+                )
+    
+    return loaded_images, reference_shape
+    
+def _standardize_key(key: str) -> str:
+    """Standardize key to XXXX format"""
+    # Remove 'image.' prefix if present
+    if key.startswith('image.'):
+        key = key.replace('image.', '')
+    # Ensure 4-digit padding
+    return key.zfill(4)
+
 
 class SegmentationDataset(Dataset):
     def __init__(self, images: Dict, labels: List[Dict]):

@@ -11,9 +11,11 @@ generated using Kedro 0.19.9
 
 from segment_anything import sam_model_registry, SamPredictor
 import logging
-from typing import Dict, Any, Tuple, List
-import numpy as np
+from typing import Dict, Any, Callable
+import pandas as pd
 import re
+from PIL import Image
+from unet.utils.dataset import _standardize_key
 
 logger = logging.getLogger(__name__)
 
@@ -66,55 +68,43 @@ def _get_image_number(filename: str) -> str:
     logger.warning(f"No 4-digit sequence found in filename: {filename}")
     return None
 
-def parse_label_studio_json(json_data: List[Dict]) -> Dict[str, np.ndarray]:
+def prepare_cropped_images(
+    partition: Dict[str, Callable[[], Any]],
+    roi: pd.DataFrame
+) -> Dict[str, Image.Image]:
     """
-    Parse Label Studio JSON annotations to extract prompt points.
+    Prepare cropped images from partition for SAM prediction.
     
     Args:
-        json_data: List of Label Studio annotation dictionaries
+        partition: Kedro partition containing images as load functions
+        roi: DataFrame containing ROI coordinates (x, y, width, height)
         
     Returns:
-        Dictionary mapping image numbers to prompt points array
-        Format: {
-            "0078": np.array([[x1, y1], [x2, y2], ...])
-        }
+        Dictionary mapping image keys to cropped PIL Images
     """
-    logger.info(f"Processing {len(json_data)} annotations from Label Studio")
-    prompt_points = {}
+    logger.info("Preparing cropped images for SAM prediction")
     
-    for item in json_data:
-        try:
-            # Get filename and extract number
-            filename = item['file_upload']
-            image_number = _get_image_number(filename)
-            
-            if not image_number:
-                logger.warning(f"Could not extract image number from: {filename}")
-                continue
-            
-            # Process annotations
-            if not item.get('annotations'):
-                logger.warning(f"No annotations found for image {image_number}")
-                continue
-                
-            points = []
-            for annotation in item['annotations']:
-                for result in annotation['result']:
-                    # Check for keypoint/point annotations
-                    if result.get('type') == 'keypointlabels':
-                        x = result['value']['x']
-                        y = result['value']['y']
-                        points.append([x, y])
-            
-            if points:
-                prompt_points[image_number] = np.array(points)
-                logger.debug(f"Extracted {len(points)} points for image {image_number}")
-            else:
-                logger.warning(f"No valid points found in annotations for image {image_number}")
-                
-        except Exception as e:
-            logger.error(f"Error processing annotation: {str(e)}")
+    # Extract ROI coordinates
+    x = roi['x'].iloc[0]
+    y = roi['y'].iloc[0]
+    w = roi['width'].iloc[0]
+    h = roi['height'].iloc[0]
+    
+    cropped_images = {}
+    
+    for key, load_func in partition.items():
+        # Skip background image
+        if "background" in key.lower():
             continue
-    
-    logger.info(f"Successfully extracted prompt points for {len(prompt_points)} images")
-    return prompt_points
+            
+        # Load and crop image
+        image_pil = load_func()
+        # Crop using PIL for better handling of image formats
+        cropped = image_pil.crop((x, y, x+w, y+h))
+        
+        # Store with standardized key
+        std_key = _standardize_key(key)
+        cropped_images[std_key] = cropped
+        
+    logger.info(f"Prepared {len(cropped_images)} cropped images")
+    return cropped_images

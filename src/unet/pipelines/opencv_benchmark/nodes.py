@@ -10,32 +10,82 @@ import logging
 import time
 import pandas as pd
 from unet.utils.parse_label_json import LabelParser
-
+from unet.utils.dataset import _standardize_key, _validate_image_shapes, filter_empty_frames
 logger = logging.getLogger(__name__)
+
+
+def select_roi(
+    partition: Dict[str, Callable[[], Any]]
+) -> pd.DataFrame:
+    """
+    Interactive ROI selection process using OpenCV.
+    
+    Args:
+        partition: Kedro partition containing images as load functions
+        
+    Returns:
+        DataFrame containing ROI coordinates (x, y, width, height)
+    """
+    # Get the first image for ROI selection
+    first_key = next(iter(partition.keys()))
+    first_image = partition[first_key]()
+    image = np.array(first_image)
+    
+    # Create window and instructions
+    window_name = 'ROI Selection'
+    cv2.namedWindow(window_name)
+    print("Instructions:")
+    print("1. Draw a rectangle by clicking and dragging")
+    print("2. Press SPACE or ENTER to confirm selection")
+    print("3. Press 'c' to cancel and retry")
+    
+    # Get ROI using selectROI
+    x, y, w, h = cv2.selectROI(window_name, image, fromCenter=False, showCrosshair=True)
+    cv2.destroyAllWindows()
+    
+    # Create DataFrame with ROI coordinates
+    roi_df = pd.DataFrame({
+        'x': [x],
+        'y': [y],
+        'width': [w],
+        'height': [h]
+    })
+    
+    logger.info(f"Selected ROI: x={x}, y={y}, width={w}, height={h}")
+    return roi_df
+
+
 
 def process_image_partition(
     partition: Dict[str, Callable[[], Any]],
-    parameters: Dict[str, Any]
+    parameters: Dict[str, Any],
+    roi: pd.DataFrame
 ) -> Tuple[Dict[str, Image.Image], pd.DataFrame]:
     """
-    Process all images in a partition and record processing times in microseconds.
+    Filter empty frames and process all images in a partition within the selected ROI and record processing times.
     
     Args:
         partition: Kedro partition containing images as load functions
         parameters: Parameters containing kernel_size, blur_size, and threshold
+        roi: DataFrame containing ROI coordinates (x, y, width, height)
     
     Returns:
         Tuple containing:
         - Dictionary mapping original partition keys to PIL Images
-        - DataFrame with processing times in microseconds for blur, subtraction, threshold, and morphology operations
+        - DataFrame with processing times in microseconds
     """
+
     logger.info("Processing images in partition")
+    
+    # Extract ROI coordinates from DataFrame
+    x = roi['x'].iloc[0]
+    y = roi['y'].iloc[0]
+    w = roi['width'].iloc[0]
+    h = roi['height'].iloc[0]
     
     # Setup
     kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, parameters["kernel_size"])
     processed_images = {}
-    
-    # Setup timing DataFrame
     timing_data = []
     
     # Get background image
@@ -46,6 +96,9 @@ def process_image_partition(
     if background is None:
         raise ValueError(f"Failed to load background image")
     
+    # Crop background to ROI
+    background = background[y:y+h, x:x+w]
+    
     # Process each image
     for key, load_func in partition.items():
         if "background" in key.lower():
@@ -53,13 +106,10 @@ def process_image_partition(
             
         times = {"image_name": key}
         
-        # Load image (not timed)
+        # Load and crop image to ROI
         image_pil = load_func()
         image = np.array(image_pil)
-        
-        if image is None:
-            logger.error(f"Failed to load image")
-            continue
+        image = image[y:y+h, x:x+w]
         
         # Blur timing
         start_time = time.perf_counter_ns()
@@ -129,162 +179,148 @@ def load_label_masks(
     logger.info(f"Loaded {len(masks)} masks with shape {reference_shape}")
     return masks
 
-def _validate_image_shapes(
-    images: Dict[str, Callable[[], Any]], 
-    condition: str,
-    sample_size: int = 5
-) -> Tuple[Dict[str, np.ndarray], tuple]:
-    """
-    Helper function to load images and validate their shapes.
-    
-    Args:
-        images: Dictionary of image load functions
-        condition: Name of the condition for logging (e.g., 'in_focus')
-        sample_size: Number of images to check for shape consistency
-        
-    Returns:
-        Tuple containing:
-        - Dictionary of loaded images as numpy arrays
-        - Reference shape of the images
-        
-    Raises:
-        ValueError: If inconsistent shapes are detected
-    """
-    loaded_images = {}
-    reference_shape = None
-    
-    for i, (key, load_func) in enumerate(images.items()):
-        img = np.array(load_func())
-        loaded_images[key] = img
-        
-        # Shape validation for first n images
-        if i < sample_size:
-            current_shape = img.shape
-            if reference_shape is None:
-                reference_shape = current_shape
-                logger.info(f"{condition} reference shape: {current_shape}")
-            elif current_shape != reference_shape:
-                raise ValueError(
-                    f"Inconsistent shape in {condition} images. "
-                    f"Expected {reference_shape}, "
-                    f"got {current_shape} for image {key}"
-                )
-    
-    return loaded_images, reference_shape
-    
-def _standardize_key(key: str) -> str:
-    """Standardize key to XXXX format"""
-    # Remove 'image.' prefix if present
-    if key.startswith('image.'):
-        key = key.replace('image.', '')
-    # Ensure 4-digit padding
-    return key.zfill(4)
 
 def compare_masks_cv2_sam(
     cv_processed: Dict[str, Callable[[], Any]],
-    segmentation_labels_json: List[Dict]
+    reconstructed_sam_masks: Dict[str, Image.Image]
 ) -> pd.DataFrame:
     """
-    Compare OpenCV processed masks with SAM segmentation labels from Label Studio JSON.
+    Compare OpenCV processed masks with reconstructed SAM masks.
+    Both inputs are Kedro PartitionedDatasets containing TIFF images.
     """
-    logger.info("Comparing OpenCV masks with SAM labels")
-    logger.info(f"Total CV processed images: {len(cv_processed)}")
+    logger.info("Comparing OpenCV masks with reconstructed SAM masks")
     
-    # Parse the Label Studio JSON into masks
-    sam_masks = LabelParser.parse_json(segmentation_labels_json)
+    # Convert images to numpy arrays first, making sure to call the load functions
+    cv_arrays = {}
+    for k, load_func in cv_processed.items():
+        try:
+            standardized_key = _standardize_key(k)
+            # Call the load function and convert to numpy array
+            img = load_func()  # Actually load the image
+            if isinstance(img, Image.Image):
+                cv_arrays[standardized_key] = np.array(img)
+            else:
+                cv_arrays[standardized_key] = np.array(img)
+            logger.debug(f"Loaded CV mask {k} with shape {cv_arrays[standardized_key].shape}")
+        except Exception as e:
+            logger.error(f"Error loading CV image {k}: {str(e)}")
+            continue
     
-    # Standardize CV image keys and load images
-    cv_images = {}
-    for key, load_func in cv_processed.items():
-        standardized_key = _standardize_key(key)
-        cv_images[standardized_key] = load_func()
-    
-    # Standardize SAM mask keys
-    sam_masks = {_standardize_key(k): v for k, v in sam_masks.items()}
-    
-    # Debug logging
-    logger.info(f"CV processed keys: {list(cv_images.keys())[:5]}...")
-    logger.info(f"SAM mask keys: {list(sam_masks.keys())[:5]}...")
-    logger.info(f"Total CV images after standardization: {len(cv_images)}")
-    logger.info(f"Total SAM masks after standardization: {len(sam_masks)}")
-    
+    sam_arrays = {}
+    for k, load_func in reconstructed_sam_masks.items():
+        try:
+            standardized_key = _standardize_key(k)
+            # Call the load function and convert to numpy array
+            img = load_func()  # Actually load the image
+            if isinstance(img, Image.Image):
+                sam_arrays[standardized_key] = np.array(img)
+            else:
+                sam_arrays[standardized_key] = np.array(img)
+            logger.debug(f"Loaded SAM mask {k} with shape {sam_arrays[standardized_key].shape}")
+        except Exception as e:
+            logger.error(f"Error loading SAM mask {k}: {str(e)}")
+            continue
+
     # Get common keys
-    common_keys = set(cv_images.keys()) & set(sam_masks.keys())
+    common_keys = set(cv_arrays.keys()) & set(sam_arrays.keys())
     
     if not common_keys:
         logger.warning("No matching image keys found between CV and SAM datasets")
-        logger.info(f"CV image format example: {next(iter(cv_images.keys()), 'no keys')}")
-        logger.info(f"SAM mask format example: {next(iter(sam_masks.keys()), 'no keys')}")
         return pd.DataFrame()
     
     logger.info(f"Found {len(common_keys)} matching image pairs")
     
     comparison_data = []
     
-    for key in common_keys:
+    for key in sorted(common_keys):
         try:
-            # Get corresponding images
-            cv_mask = cv_images[key]
-            sam_mask = sam_masks[key]
+            cv_mask = cv_arrays[key]
+            sam_mask = sam_arrays[key]
             
-            # Convert to numpy arrays if needed
-            if isinstance(cv_mask, Image.Image):
-                cv_mask = np.array(cv_mask)
+            # Add shape debugging
+            logger.debug(f"Processing pair {key}:")
+            logger.debug(f"CV mask shape: {cv_mask.shape}, dtype: {cv_mask.dtype}")
+            logger.debug(f"SAM mask shape: {sam_mask.shape}, dtype: {sam_mask.dtype}")
             
-            # Ensure both masks are binary
-            cv_mask = (cv_mask > 0).astype(np.uint8)
-            sam_mask = (sam_mask > 0).astype(np.uint8)
+            # Ensure arrays are properly loaded
+            if cv_mask is None or sam_mask is None:
+                logger.warning(f"Skipping {key} - null mask detected")
+                continue
+            
+            # Convert to binary masks (handle both 0-1 and 0-255 ranges)
+            cv_mask = (cv_mask > 127).astype(np.uint8)
+            sam_mask = (sam_mask > 127).astype(np.uint8)
             
             # Calculate metrics
             intersection = np.logical_and(cv_mask, sam_mask)
             union = np.logical_or(cv_mask, sam_mask)
             
-            iou = np.sum(intersection) / np.sum(union) if np.sum(union) > 0 else 0
-            dice = (2 * np.sum(intersection)) / (np.sum(cv_mask) + np.sum(sam_mask)) if (np.sum(cv_mask) + np.sum(sam_mask)) > 0 else 0
+            intersection_sum = np.sum(intersection)
+            union_sum = np.sum(union)
+            cv_sum = np.sum(cv_mask)
+            sam_sum = np.sum(sam_mask)
+            
+            iou = intersection_sum / union_sum if union_sum > 0 else 0
+            dice = (2 * intersection_sum) / (cv_sum + sam_sum) if (cv_sum + sam_sum) > 0 else 0
             
             comparison_data.append({
                 'image_name': key,
                 'iou_score': round(float(iou), 4),
-                'dice_score': round(float(dice), 4)
+                'dice_score': round(float(dice), 4),
+                'cv_mask_area': int(cv_sum),
+                'sam_mask_area': int(sam_sum),
+                'intersection_area': int(intersection_sum),
+                'union_area': int(union_sum)
             })
             
         except Exception as e:
             logger.error(f"Error processing image pair {key}: {str(e)}")
+            logger.exception("Full traceback:")
             continue
     
     if not comparison_data:
         logger.warning("No valid image pairs were processed")
         return pd.DataFrame()
     
-    df = pd.DataFrame(comparison_data)
+    results_df = pd.DataFrame(comparison_data)
     
     # Log summary statistics
-    logger.info(f"Successfully processed {len(df)} image pairs")
-    logger.info(f"Average IoU: {df['iou_score'].mean():.4f}")
-    logger.info(f"Average Dice: {df['dice_score'].mean():.4f}")
+    logger.info(f"Successfully processed {len(results_df)} image pairs")
+    logger.info(f"Average IoU: {results_df['iou_score'].mean():.4f}")
+    logger.info(f"Average Dice: {results_df['dice_score'].mean():.4f}")
     
-    return df
+    return results_df
 
 def reconstruct_sam_masks(
-    segmentation_labels_json: List[Dict]
+    segmentation_labels_json: List[Dict],
+    roi: pd.DataFrame
 ) -> Dict[str, Image.Image]:
     """
-    Convert Label Studio JSON annotations to TIFF images.
+    Convert Label Studio JSON annotations to TIFF images and crop to ROI.
     
     Args:
         segmentation_labels_json: Raw JSON data from Label Studio annotations
+        roi: DataFrame containing ROI coordinates (x, y, width, height)
         
     Returns:
         Dictionary mapping image keys to PIL Images ready for saving as TIFF
     """
+    # Extract ROI coordinates from DataFrame
+    x = roi['x'].iloc[0]
+    y = roi['y'].iloc[0]
+    w = roi['width'].iloc[0]
+    h = roi['height'].iloc[0]
+    
     # Use existing parser to decode masks
     masks = LabelParser.parse_json(segmentation_labels_json)
     
-    # Convert numpy arrays to PIL Images
+    # Convert numpy arrays to PIL Images and crop to ROI
     tiff_masks = {}
     for key, mask in masks.items():
+        # Crop mask to ROI
+        cropped_mask = mask[y:y+h, x:x+w]
         # Scale binary mask to 0-255 for better visibility
-        mask_image = Image.fromarray(mask * 255)
+        mask_image = Image.fromarray(cropped_mask * 255)
         tiff_masks[key] = mask_image
     
     logger.info(f"Successfully converted {len(tiff_masks)} masks to TIFF format")

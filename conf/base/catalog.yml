@@ -9,10 +9,22 @@ In_focus_partition:
   path: data/01_raw/In_focus/
   filename_suffix: ".tiff"
 
-Slight_under_focus_partition:
+Slight_under_partition:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
   path: data/01_raw/Slight_under_focus/
+  filename_suffix: ".tiff"
+
+filtered_in_focus_partition:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/02_intermediate/opencv_benchmark/filtered_images/In_focus/
+  filename_suffix: ".tiff"
+
+filtered_slight_under_partition:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/02_intermediate/opencv_benchmark/filtered_images/Slight_under_focus/
   filename_suffix: ".tiff"
 
 # Segmentation labels
@@ -28,68 +40,84 @@ segmentation_labels_slight_under:
 reconstructed_sam_masks_in_focus:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
-  path: data/02_intermediate/sam_masks/in_focus
+  path: data/02_intermediate/opencv_benchmark/sam_masks/in_focus
   filename_suffix: ".tiff"
 
 reconstructed_sam_masks_slight_under:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
-  path: data/02_intermediate/sam_masks/slight_under
+  path: data/02_intermediate/opencv_benchmark/sam_masks/slight_under
   filename_suffix: ".tiff"
 
 # Paired Image to Segmentation dataset
 segmentation_dataset_in_focus:
   type: pickle.PickleDataset
-  filepath: data/02_intermediate/segmentation_dataset.pkl
+  filepath: data/02_intermediate/model_training/segmentation_dataset.pkl
 
 # Training datasets
 train_dataset:
   type: pickle.PickleDataset
-  filepath: data/02_intermediate/train_dataset.pkl
+  filepath: data/02_intermediate/model_training/train_dataset.pkl
 
 val_dataset:
   type: pickle.PickleDataset
-  filepath: data/02_intermediate/val_dataset.pkl
+  filepath: data/02_intermediate/model_training/val_dataset.pkl
 
 trained_unet:
   type: pickle.PickleDataset
-  filepath: data/06_models/unet_model.pkl
+  filepath: data/06_models/model_training/unet_model.pkl
 
 # Opencv processed images
+general_roi_coordinates:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/opencv_benchmark/general_roi_coordinates.csv
+
 cv_processed_in_focus:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
-  path: data/02_intermediate/cv_processed_images/In_focus/
+  path: data/02_intermediate/opencv_benchmark/cv_processed_images/In_focus/
   filename_suffix: ".tiff"
 
 cv_processed_timing_in_focus:
   type: pandas.CSVDataset
-  filepath: data/02_intermediate/cv_processed_images/In_focus/cv_processed_timing_in_focus.csv
+  filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/In_focus/cv_processed_timing_in_focus.csv
 
 cv_processed_slight_under:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
-  path: data/02_intermediate/cv_processed_images/Slight_under_focus/
+  path: data/02_intermediate/opencv_benchmark/cv_processed_images/Slight_under_focus/
   filename_suffix: ".tiff"
 
 cv_processed_timing_slight_under:
   type: pandas.CSVDataset
-  filepath: data/02_intermediate/cv_processed_images/Slight_under_focus/cv_processed_timing_slight_under.csv
+  filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/Slight_under_focus/cv_processed_timing_slight_under.csv
+
+# Opencv plots and figures
+# with different params on in_focus and slight_under compare iou and dice to SAM
+
 
 # Comparison metrics between SAM and OpenCV
 mask_comparison_metrics:
   type: pandas.CSVDataset
-  filepath: data/03_primary/mask_comparison_metrics.csv
+  filepath: data/03_primary/opencv_benchmark/mask_comparison_metrics.csv
   save_args:
     index: False
 
 mask_comparison_metrics_slight_under:
   type: pandas.CSVDataset
-  filepath: data/03_primary/mask_comparison_metrics_slight_under.csv
+  filepath: data/03_primary/opencv_benchmark/mask_comparison_metrics_slight_under.csv
   save_args:
     index: False
 
-# SAM Benchmark
-prompt_points_in_focus:
-  type: pickle.PickleDataset
-  filepath: data/02_intermediate/prompt_points_in_focus.pkl
+# Cropped images for SAM prediction
+cropped_images_in_focus:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/05_model_input/In_focus/
+  filename_suffix: ".tiff"
+
+cropped_images_slight_under:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/05_model_input/Slight_under_focus/
+  filename_suffix: ".tiff"
