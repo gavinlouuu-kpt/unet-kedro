@@ -11,7 +11,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         node(
             func=create_segmentation_dataset,
             inputs=["In_focus_partition", "segmentation_labels_in_focus"],
-            outputs="segmentation_dataset",
+            outputs="segmentation_dataset_in_focus",
             name="create_segmentation_dataset_node"
         )
     ])
