@@ -4,6 +4,6 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.9/configuration/parameters.html
 sam:
-  model_type: vit_h
-  checkpoint: data/06_models/sam_vit_h_4b8939.pth
+  model_type: vit_t # or vit_h, vit_b, vit_t
+  checkpoint: data/06_models/sam_weights/mobile_sam.pt
   device: cuda

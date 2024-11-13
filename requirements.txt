@@ -17,3 +17,6 @@ torchvision>=0.15.0
 opencv-python>=4.6.0
 # Label Studio SDK
 label-studio-sdk>=1.0.7
+# MobileSAM
+git+https://github.com/CASIA-IVA-Lab/MobileSAM.git
+timm>=0.9.0

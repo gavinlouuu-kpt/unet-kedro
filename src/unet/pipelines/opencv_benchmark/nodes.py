@@ -185,8 +185,14 @@ def compare_masks_cv2_sam(
     reconstructed_sam_masks: Dict[str, Image.Image]
 ) -> pd.DataFrame:
     """
-    Compare OpenCV processed masks with reconstructed SAM masks.
-    Both inputs are Kedro PartitionedDatasets containing TIFF images.
+    Compare OpenCV processed masks with reconstructed SAM masks and calculate metrics.
+    
+    Args:
+        cv_processed: Kedro PartitionedDataSet containing CV processed masks
+        reconstructed_sam_masks: Kedro PartitionedDataSet containing SAM masks
+        
+    Returns:
+        DataFrame with comparison metrics (IoU, Dice scores, etc.)
     """
     logger.info("Comparing OpenCV masks with reconstructed SAM masks")
     
@@ -325,3 +331,103 @@ def reconstruct_sam_masks(
     
     logger.info(f"Successfully converted {len(tiff_masks)} masks to TIFF format")
     return tiff_masks
+
+def create_mask_overlays(
+    cv_processed: Dict[str, Callable[[], Any]],
+    reconstructed_sam_masks: Dict[str, Image.Image],
+    original_images: Dict[str, Image.Image],
+    roi: pd.DataFrame
+) -> Tuple[Dict[str, Image.Image], Dict[str, Image.Image], Dict[str, Image.Image]]:
+    """
+    Create overlay visualizations combining original images with masks.
+    
+    Args:
+        cv_processed: Kedro PartitionedDataSet containing CV processed masks
+        reconstructed_sam_masks: Kedro PartitionedDataSet containing SAM masks
+        original_images: Kedro PartitionedDataSet containing original images
+        roi: DataFrame containing ROI coordinates (x, y, width, height)
+        
+    Returns:
+        Tuple of three dictionaries:
+        - CV overlay images
+        - SAM overlay images
+        - Combined overlay images
+    """
+    logger.info("Creating mask overlays")
+    
+    # Get common keys between the image datasets only
+    common_keys = set(cv_processed.keys()) & set(reconstructed_sam_masks.keys()) & \
+                 set(k for k in original_images.keys() if k != 'background')
+    
+    logger.info(f"Found {len(common_keys)} common keys between datasets")
+    
+    OPACITY = 0.2
+    COLOR_CV = (255, 0, 0)  # Red
+    COLOR_SAM = (0, 255, 0)  # Green
+    COLOR_BOTH = (255, 255, 0)  # Yellow
+    
+    cv_overlays = {}
+    sam_overlays = {}
+    combined_overlays = {}
+    
+    # Extract ROI coordinates
+    x = roi['x'].iloc[0]
+    y = roi['y'].iloc[0]
+    w = roi['width'].iloc[0]
+    h = roi['height'].iloc[0]
+    
+    for key in sorted(common_keys):
+        try:
+            # Load all images
+            cv_mask = np.array(cv_processed[key]())
+            sam_mask = np.array(reconstructed_sam_masks[key]())
+            original = np.array(original_images[key]())
+
+            # Crop original image to ROI
+            original_cropped = original[y:y+h, x:x+w]
+
+            # Convert masks to binary
+            cv_mask = (cv_mask > 127).astype(np.uint8)
+            sam_mask = (sam_mask > 127).astype(np.uint8)
+            
+            # Ensure original image is RGB
+            if len(original_cropped.shape) == 2:
+                original_cropped = cv2.cvtColor(original_cropped, cv2.COLOR_GRAY2RGB)
+            
+            # Verify shapes match
+            if cv_mask.shape[:2] != original_cropped.shape[:2] or sam_mask.shape[:2] != original_cropped.shape[:2]:
+                logger.warning(f"Shape mismatch for {key}:")
+                logger.warning(f"CV mask: {cv_mask.shape}, SAM mask: {sam_mask.shape}, Original: {original_cropped.shape}")
+                continue
+
+            # 1. Original + CV mask overlay
+            cv_overlay = original_cropped.copy()
+            cv_overlay[cv_mask == 1] = cv_overlay[cv_mask == 1] * (1 - OPACITY) + \
+                                     np.array(COLOR_CV) * OPACITY
+            cv_overlays[key] = Image.fromarray(cv_overlay.astype(np.uint8))
+            
+            # 2. Original + SAM mask overlay
+            sam_overlay = original_cropped.copy()
+            sam_overlay[sam_mask == 1] = sam_overlay[sam_mask == 1] * (1 - OPACITY) + \
+                                       np.array(COLOR_SAM) * OPACITY
+            sam_overlays[key] = Image.fromarray(sam_overlay.astype(np.uint8))
+            
+            # 3. Original + both masks overlay
+            combined_overlay = original_cropped.copy()
+            combined_overlay[cv_mask == 1] = combined_overlay[cv_mask == 1] * (1 - OPACITY) + \
+                                           np.array(COLOR_CV) * OPACITY
+            combined_overlay[sam_mask == 1] = combined_overlay[sam_mask == 1] * (1 - OPACITY) + \
+                                            np.array(COLOR_SAM) * OPACITY
+            overlap = (cv_mask == 1) & (sam_mask == 1)
+            combined_overlay[overlap] = combined_overlay[overlap] * (1 - OPACITY) + \
+                                     np.array(COLOR_BOTH) * OPACITY
+            combined_overlays[key] = Image.fromarray(combined_overlay.astype(np.uint8))
+            
+            logger.debug(f"Created overlays for image {key}")
+            
+        except Exception as e:
+            logger.error(f"Error creating overlays for image {key}: {str(e)}")
+            continue
+    
+    logger.info(f"Successfully created overlays for {len(common_keys)} images")
+    return cv_overlays, sam_overlays, combined_overlays

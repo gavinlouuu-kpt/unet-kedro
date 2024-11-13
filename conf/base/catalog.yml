@@ -99,25 +99,89 @@ cv_processed_timing_slight_under:
 # Comparison metrics between SAM and OpenCV
 mask_comparison_metrics:
   type: pandas.CSVDataset
-  filepath: data/03_primary/opencv_benchmark/mask_comparison_metrics.csv
+  filepath: data/08_reporting/opencv_benchmark/mask_comparison_metrics.csv
   save_args:
     index: False
 
 mask_comparison_metrics_slight_under:
   type: pandas.CSVDataset
-  filepath: data/03_primary/opencv_benchmark/mask_comparison_metrics_slight_under.csv
+  filepath: data/08_reporting/opencv_benchmark/mask_comparison_metrics_slight_under.csv
   save_args:
     index: False
+
+in_focus_cv_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/in_focus/cv
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+in_focus_sam_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/in_focus/sam
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+in_focus_combined_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/in_focus/combined
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+slight_under_cv_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/slight_under/cv
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+slight_under_sam_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/slight_under/sam
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+slight_under_combined_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/slight_under/combined
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
 
 # Cropped images for SAM prediction
 cropped_images_in_focus:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
-  path: data/05_model_input/In_focus/
+  path: data/05_model_input/sam_prediction/In_focus/
   filename_suffix: ".tiff"
 
 cropped_images_slight_under:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
-  path: data/05_model_input/Slight_under_focus/
+  path: data/05_model_input/sam_prediction/Slight_under_focus/
   filename_suffix: ".tiff"
+
+# ... existing entries ...
+
+# SAM prediction outputs
+prompted_sam_masks_in_focus:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/07_model_output/sam_prediction/In_focus/
+  filename_suffix: ".tiff"
+  
+prompted_sam_masks_slight_under:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/07_model_output/sam_prediction/Slight_under_focus/
+  filename_suffix: ".tiff"
+  
+# Timing data outputs
+sam_prediction_timing_in_focus:
+  type: pandas.CSVDataset
+  filepath: data/07_model_output/sam_prediction/In_focus/timing_data.csv
+  save_args:
+    index: False
+
+sam_prediction_timing_slight_under:
+  type: pandas.CSVDataset
+  filepath: data/07_model_output/sam_prediction/Slight_under_focus/timing_data.csv
+  save_args:
+    index: False
