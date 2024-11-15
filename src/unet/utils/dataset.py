@@ -14,7 +14,7 @@ def filter_empty_frames(
     partition: Dict[str, Callable[[], Any]],
     parameters: Dict[str, Any],
     roi: pd.DataFrame
-) -> Dict[str, Callable[[], Any]]:
+) -> Dict[str, Image.Image]:
     """
     Filter out frames that are empty within the ROI using the same processing pipeline as the main processing.
     
@@ -22,49 +22,45 @@ def filter_empty_frames(
         partition: Dictionary of image load functions
         parameters: Processing parameters
         roi: DataFrame containing ROI coordinates (x, y, width, height)
+        
+    Returns:
+        Dictionary of filtered PIL Images (including background)
     """
     logger.info("Filtering empty frames")
     logger.info(f"Initial frame count: {len(partition)}")
-    logger.info(f"Parameters: {parameters}")
     
     # Extract ROI coordinates
     x = roi['x'].iloc[0]
     y = roi['y'].iloc[0]
     w = roi['width'].iloc[0]
     h = roi['height'].iloc[0]
-    logger.info(f"Using ROI: x={x}, y={y}, w={w}, h={h}")
     
     # Setup
     kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, parameters["kernel_size"])
-    filtered_partition = {}
+    filtered_images = {}
     all_areas = []
     
-    # Get background image
+    # Get background image and store as PIL Image
     bg_key = next(key for key in partition.keys() if "background" in key.lower())
     background_pil = partition[bg_key]()
     background = np.array(background_pil)
-    # Crop background to ROI
     background = background[y:y+h, x:x+w]
-    filtered_partition[bg_key] = partition[bg_key]  # Keep background image
+    filtered_images[bg_key] = background_pil
     
     # Process each image
     for key, load_func in partition.items():
         if "background" in key.lower():
             continue
             
-        # Load and crop image to ROI
+        # Load and process image
         image_pil = load_func()
         image = np.array(image_pil)
         image = image[y:y+h, x:x+w]
         
-        # Apply same processing as in process_image_partition
+        # Apply processing
         blurred_bg = cv2.GaussianBlur(background, parameters["blur_size"], 0)
         blurred = cv2.GaussianBlur(image, parameters["blur_size"], 0)
-        
-        # Background subtraction
         bg_sub = cv2.subtract(blurred_bg, blurred)
-        
-        # Threshold
         _, binary = cv2.threshold(bg_sub, parameters["threshold"], 255, cv2.THRESH_BINARY)
         
         # Morphological operations
@@ -73,7 +69,7 @@ def filter_empty_frames(
         erode2 = cv2.erode(erode1, kernel, iterations=1)
         processed = cv2.dilate(erode2, kernel, iterations=1)
         
-        # Calculate area of white pixels within ROI
+        # Calculate area
         white_area = np.sum(processed > 0)
         all_areas.append(white_area)
         
@@ -81,12 +77,12 @@ def filter_empty_frames(
         
         # Keep frame if it has sufficient white pixels in ROI
         if white_area > parameters["minimum_area"]:
-            filtered_partition[key] = load_func
+            filtered_images[key] = image_pil
             logger.debug(f"Keeping frame {key}")
         else:
             logger.debug(f"Filtering out frame {key}")
     
-    # Log statistics about areas
+    # Log statistics
     if all_areas:
         logger.info(f"Area statistics within ROI:")
         logger.info(f"Min area: {min(all_areas)}")
@@ -94,14 +90,10 @@ def filter_empty_frames(
         logger.info(f"Mean area: {np.mean(all_areas):.2f}")
         logger.info(f"Median area: {np.median(all_areas):.2f}")
     
-    logger.info(f"Filtered {len(partition) - len(filtered_partition)} empty frames")
-    logger.info(f"Remaining frames: {len(filtered_partition)}")
+    logger.info(f"Filtered {len(partition) - len(filtered_images)} empty frames")
+    logger.info(f"Remaining frames: {len(filtered_images)}")
     
-    if len(filtered_partition) <= 1:
-        logger.warning("No frames passed the filtering! Adjusting might be needed.")
-        logger.warning(f"Consider setting minimum_area below the mean area: {np.mean(all_areas):.2f}")
-    
-    return filtered_partition
+    return filtered_images
 
 def _validate_image_shapes(
     images: Dict[str, Callable[[], Any]], 

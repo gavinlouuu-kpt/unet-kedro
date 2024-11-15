@@ -3,54 +3,164 @@
 #   type: pillow.ImageDataset
 #   filepath: data/01_raw/In_focus/background.tiff
 
-In_focus_partition:
+original_In_focus_partition:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
   path: data/01_raw/In_focus/
   filename_suffix: ".tiff"
 
-Slight_under_partition:
+original_Slight_under_focus_partition:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
   path: data/01_raw/Slight_under_focus/
   filename_suffix: ".tiff"
 
-filtered_in_focus_partition:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/02_intermediate/opencv_benchmark/filtered_images/In_focus/
-  filename_suffix: ".tiff"
+filtered_In_focus:
+  type: pickle.PickleDataset
+  filepath: data/02_intermediate/opencv_benchmark/filtered_images/In_focus_images.pkl
 
-filtered_slight_under_partition:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/02_intermediate/opencv_benchmark/filtered_images/Slight_under_focus/
-  filename_suffix: ".tiff"
+filtered_Slight_under_focus:
+  type: pickle.PickleDataset
+  filepath: data/02_intermediate/opencv_benchmark/filtered_images/Slight_under_focus_images.pkl
 
 # Segmentation labels
-segmentation_labels_in_focus:
+segmentation_labels_In_focus:
   type: json.JSONDataset
   filepath: data/01_raw/In_focus/In_focus.json
 
-segmentation_labels_slight_under:
+segmentation_labels_Slight_under_focus:
   type: json.JSONDataset
   filepath: data/01_raw/Slight_under_focus/Slight_under_focus.json
 
 # Reconstructed masks
-reconstructed_sam_masks_in_focus:
+reconstructed_sam_masks_In_focus:
+  type: pickle.PickleDataset
+  filepath: data/02_intermediate/opencv_benchmark/sam_masks/In_focus.pkl
+
+reconstructed_sam_masks_Slight_under_focus:
+  type: pickle.PickleDataset
+  filepath: data/02_intermediate/opencv_benchmark/sam_masks/Slight_under_focus.pkl
+
+
+# Opencv processed images
+general_roi_coordinates:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/opencv_benchmark/general_roi_coordinates.csv
+
+cv_processed_In_focus:
+  type: pickle.PickleDataset
+  filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/In_focus/In_focus.pkl
+
+cv_processed_timing_In_focus:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/In_focus/cv_processed_timing_In_focus.csv
+
+cv_processed_Slight_under_focus:
+  type: pickle.PickleDataset
+  filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/Slight_under_focus/Slight_under_focus.pkl
+
+cv_processed_timing_Slight_under_focus:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/Slight_under_focus/cv_processed_timing_Slight_under.csv
+
+# Opencv plots and figures
+# with different params on In_focus and Slight_under compare iou and dice to SAM
+
+
+# Comparison metrics between SAM and OpenCV
+mask_comparison_metrics:
+  type: pandas.CSVDataset
+  filepath: data/08_reporting/opencv_benchmark/mask_comparison_metrics.csv
+  save_args:
+    index: False
+
+mask_comparison_metrics_Slight_under_focus:
+  type: pandas.CSVDataset
+  filepath: data/08_reporting/opencv_benchmark/mask_comparison_metrics_Slight_under_focus.csv
+  save_args:
+    index: False
+
+In_focus_cv_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/In_focus/cv
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+In_focus_sam_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/In_focus/sam
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+In_focus_combined_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/In_focus/combined
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+Slight_under_focus_cv_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/Slight_under_focus/cv
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+Slight_under_focus_sam_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/Slight_under_focus/sam
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+Slight_under_focus_combined_overlays:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/opencv_benchmark/overlays/Slight_under_focus/combined
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+# Cropped images for SAM prediction
+cropped_images_In_focus:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
-  path: data/02_intermediate/opencv_benchmark/sam_masks/in_focus
+  path: data/05_model_input/sam_prediction/In_focus/
   filename_suffix: ".tiff"
 
-reconstructed_sam_masks_slight_under:
+cropped_images_Slight_under_focus:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
-  path: data/02_intermediate/opencv_benchmark/sam_masks/slight_under
+  path: data/05_model_input/sam_prediction/Slight_under_focus/
   filename_suffix: ".tiff"
+
+# ... existing entries ...
+
+# SAM prediction outputs
+prompted_sam_masks_In_focus:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/07_model_output/sam_prediction/In_focus/
+  filename_suffix: ".tiff"
+  
+prompted_sam_masks_Slight_under_focus:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/07_model_output/sam_prediction/Slight_under_focus/
+  filename_suffix: ".tiff"
+  
+# Timing data outputs
+sam_prediction_timing_In_focus:
+  type: pandas.CSVDataset
+  filepath: data/07_model_output/sam_prediction/In_focus/timing_data.csv
+  save_args:
+    index: False
+
+sam_prediction_timing_Slight_under_focus:
+  type: pandas.CSVDataset
+  filepath: data/07_model_output/sam_prediction/Slight_under_focus/timing_data.csv
+  save_args:
+    index: False
+
+########################################################datascience pipeline
 
 # Paired Image to Segmentation dataset
-segmentation_dataset_in_focus:
+segmentation_dataset_In_focus:
   type: pickle.PickleDataset
   filepath: data/02_intermediate/model_training/segmentation_dataset.pkl
 
@@ -66,122 +176,3 @@ val_dataset:
 trained_unet:
   type: pickle.PickleDataset
   filepath: data/06_models/model_training/unet_model.pkl
-
-# Opencv processed images
-general_roi_coordinates:
-  type: pandas.CSVDataset
-  filepath: data/02_intermediate/opencv_benchmark/general_roi_coordinates.csv
-
-cv_processed_in_focus:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/02_intermediate/opencv_benchmark/cv_processed_images/In_focus/
-  filename_suffix: ".tiff"
-
-cv_processed_timing_in_focus:
-  type: pandas.CSVDataset
-  filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/In_focus/cv_processed_timing_in_focus.csv
-
-cv_processed_slight_under:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/02_intermediate/opencv_benchmark/cv_processed_images/Slight_under_focus/
-  filename_suffix: ".tiff"
-
-cv_processed_timing_slight_under:
-  type: pandas.CSVDataset
-  filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/Slight_under_focus/cv_processed_timing_slight_under.csv
-
-# Opencv plots and figures
-# with different params on in_focus and slight_under compare iou and dice to SAM
-
-
-# Comparison metrics between SAM and OpenCV
-mask_comparison_metrics:
-  type: pandas.CSVDataset
-  filepath: data/08_reporting/opencv_benchmark/mask_comparison_metrics.csv
-  save_args:
-    index: False
-
-mask_comparison_metrics_slight_under:
-  type: pandas.CSVDataset
-  filepath: data/08_reporting/opencv_benchmark/mask_comparison_metrics_slight_under.csv
-  save_args:
-    index: False
-
-in_focus_cv_overlays:
-  type: partitions.PartitionedDataset
-  path: data/08_reporting/opencv_benchmark/overlays/in_focus/cv
-  filename_suffix: ".png"
-  dataset: pillow.ImageDataset
-
-in_focus_sam_overlays:
-  type: partitions.PartitionedDataset
-  path: data/08_reporting/opencv_benchmark/overlays/in_focus/sam
-  filename_suffix: ".png"
-  dataset: pillow.ImageDataset
-
-in_focus_combined_overlays:
-  type: partitions.PartitionedDataset
-  path: data/08_reporting/opencv_benchmark/overlays/in_focus/combined
-  filename_suffix: ".png"
-  dataset: pillow.ImageDataset
-
-slight_under_cv_overlays:
-  type: partitions.PartitionedDataset
-  path: data/08_reporting/opencv_benchmark/overlays/slight_under/cv
-  filename_suffix: ".png"
-  dataset: pillow.ImageDataset
-
-slight_under_sam_overlays:
-  type: partitions.PartitionedDataset
-  path: data/08_reporting/opencv_benchmark/overlays/slight_under/sam
-  filename_suffix: ".png"
-  dataset: pillow.ImageDataset
-
-slight_under_combined_overlays:
-  type: partitions.PartitionedDataset
-  path: data/08_reporting/opencv_benchmark/overlays/slight_under/combined
-  filename_suffix: ".png"
-  dataset: pillow.ImageDataset
-
-# Cropped images for SAM prediction
-cropped_images_in_focus:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/05_model_input/sam_prediction/In_focus/
-  filename_suffix: ".tiff"
-
-cropped_images_slight_under:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/05_model_input/sam_prediction/Slight_under_focus/
-  filename_suffix: ".tiff"
-
-# ... existing entries ...
-
-# SAM prediction outputs
-prompted_sam_masks_in_focus:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/07_model_output/sam_prediction/In_focus/
-  filename_suffix: ".tiff"
-  
-prompted_sam_masks_slight_under:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/07_model_output/sam_prediction/Slight_under_focus/
-  filename_suffix: ".tiff"
-  
-# Timing data outputs
-sam_prediction_timing_in_focus:
-  type: pandas.CSVDataset
-  filepath: data/07_model_output/sam_prediction/In_focus/timing_data.csv
-  save_args:
-    index: False
-
-sam_prediction_timing_slight_under:
-  type: pandas.CSVDataset
-  filepath: data/07_model_output/sam_prediction/Slight_under_focus/timing_data.csv
-  save_args:
-    index: False

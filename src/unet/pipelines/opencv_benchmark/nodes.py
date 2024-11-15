@@ -56,25 +56,22 @@ def select_roi(
 
 
 
-def process_image_partition(
-    partition: Dict[str, Callable[[], Any]],
+def process_image(
+    images: Dict[str, Image.Image],
     parameters: Dict[str, Any],
     roi: pd.DataFrame
 ) -> Tuple[Dict[str, Image.Image], pd.DataFrame]:
     """
-    Filter empty frames and process all images in a partition within the selected ROI and record processing times.
+    Process images using OpenCV operations within the selected ROI.
     
     Args:
-        partition: Kedro partition containing images as load functions
+        images: Dictionary containing images as PIL Images
         parameters: Parameters containing kernel_size, blur_size, and threshold
-        roi: DataFrame containing ROI coordinates (x, y, width, height)
+        roi: DataFrame containing ROI coordinates
     
     Returns:
-        Tuple containing:
-        - Dictionary mapping original partition keys to PIL Images
-        - DataFrame with processing times in microseconds
+        Tuple containing processed images dictionary and timing DataFrame
     """
-
     logger.info("Processing images in partition")
     
     # Extract ROI coordinates from DataFrame
@@ -88,70 +85,122 @@ def process_image_partition(
     processed_images = {}
     timing_data = []
     
-    # Get background image
-    bg_key = next(key for key in partition.keys() if "background" in key.lower())
-    background_pil = partition[bg_key]()
-    background = np.array(background_pil)
-    
-    if background is None:
-        raise ValueError(f"Failed to load background image")
-    
-    # Crop background to ROI
-    background = background[y:y+h, x:x+w]
+    # Get and validate background image
+    try:
+        # Debug available keys
+        logger.debug(f"Available keys: {list(images.keys())}")
+        
+        # Find background image
+        bg_keys = [key for key in images.keys() if "background" in key.lower()]
+        if not bg_keys:
+            raise ValueError("No background image found in dataset")
+        bg_key = bg_keys[0]
+        
+        # Load background image
+        background_pil = images[bg_key]
+        logger.debug(f"Background image type: {type(background_pil)}")
+        
+        if not isinstance(background_pil, Image.Image):
+            raise ValueError(f"Background image is not a PIL Image: {type(background_pil)}")
+            
+        # Convert to numpy array
+        background = np.array(background_pil)
+        logger.debug(f"Background array shape: {background.shape}, dtype: {background.dtype}")
+        
+        if background.size == 0:
+            raise ValueError("Background image is empty")
+            
+        if background.ndim < 2:
+            raise ValueError(f"Invalid background image dimensions: {background.shape}")
+            
+        # Crop background to ROI
+        background = background[y:y+h, x:x+w]
+        logger.debug(f"Background shape after crop: {background.shape}")
+        
+    except Exception as e:
+        logger.error(f"Error processing background image: {str(e)}")
+        logger.error("Background image details:")
+        if 'bg_key' in locals():
+            logger.error(f"Background key: {bg_key}")
+            if bg_key in images:
+                logger.error(f"Background image type: {type(images[bg_key])}")
+        raise
     
     # Process each image
-    for key, load_func in partition.items():
+    for key, img_pil in images.items():
         if "background" in key.lower():
             continue
             
-        times = {"image_name": key}
-        
-        # Load and crop image to ROI
-        image_pil = load_func()
-        image = np.array(image_pil)
-        image = image[y:y+h, x:x+w]
-        
-        # Blur timing
-        start_time = time.perf_counter_ns()
-        blurred_bg = cv2.GaussianBlur(background, parameters["blur_size"], 0)
-        blurred = cv2.GaussianBlur(image, parameters["blur_size"], 0)
-        times["blur_time"] = (time.perf_counter_ns() - start_time) / 1000
-        
-        # Subtraction timing
-        start_time = time.perf_counter_ns()
-        bg_sub = cv2.subtract(blurred_bg, blurred)
-        times["subtraction_time"] = (time.perf_counter_ns() - start_time) / 1000
-        
-        # Threshold timing
-        start_time = time.perf_counter_ns()
-        _, binary = cv2.threshold(bg_sub, parameters["threshold"], 255, cv2.THRESH_BINARY)
-        times["threshold_time"] = (time.perf_counter_ns() - start_time) / 1000
-        
-        # Morphology timing
-        start_time = time.perf_counter_ns()
-        dilate1 = cv2.dilate(binary, kernel, iterations=1)
-        erode1 = cv2.erode(dilate1, kernel, iterations=1)
-        erode2 = cv2.erode(erode1, kernel, iterations=1)
-        processed = cv2.dilate(erode2, kernel, iterations=1)
-        times["morphology_time"] = (time.perf_counter_ns() - start_time) / 1000
-        
-        # Ensure the processed image is properly converted
-        processed = processed.astype(np.uint8)
-        # logger.info(f"Processed shape before PIL conversion: {processed.shape}")
-        processed_images[key] = Image.fromarray(processed, mode='L')  # 'L' mode for grayscale
-        
-        # Calculate total time
-        times["total_time"] = sum(v for k, v in times.items() if k != "image_name")
-        
-        # Add to timing data
-        timing_data.append(times)
+        try:
+            times = {"image_name": key}
+            
+            # Convert PIL to numpy and validate
+            image = np.array(img_pil)
+            if image.ndim < 2:
+                logger.warning(f"Skipping {key}: Invalid image dimensions {image.shape}")
+                continue
+                
+            # Debug logging
+            logger.debug(f"Processing {key}:")
+            logger.debug(f"Original shape: {image.shape}")
+            
+            # Crop image to ROI
+            image = image[y:y+h, x:x+w]
+            logger.debug(f"Cropped shape: {image.shape}")
+            
+            # Ensure images are grayscale
+            if len(image.shape) > 2:
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            if len(background.shape) > 2:
+                background = cv2.cvtColor(background, cv2.COLOR_RGB2GRAY)
+            
+            # Blur timing
+            start_time = time.perf_counter_ns()
+            blurred_bg = cv2.GaussianBlur(background, parameters["blur_size"], 0)
+            blurred = cv2.GaussianBlur(image, parameters["blur_size"], 0)
+            times["blur_time"] = (time.perf_counter_ns() - start_time) / 1000
+            
+            # Subtraction timing
+            start_time = time.perf_counter_ns()
+            bg_sub = cv2.subtract(blurred_bg, blurred)
+            times["subtraction_time"] = (time.perf_counter_ns() - start_time) / 1000
+            
+            # Threshold timing
+            start_time = time.perf_counter_ns()
+            _, binary = cv2.threshold(bg_sub, parameters["threshold"], 255, cv2.THRESH_BINARY)
+            times["threshold_time"] = (time.perf_counter_ns() - start_time) / 1000
+            
+            # Morphology timing
+            start_time = time.perf_counter_ns()
+            dilate1 = cv2.dilate(binary, kernel, iterations=1)
+            erode1 = cv2.erode(dilate1, kernel, iterations=1)
+            erode2 = cv2.erode(erode1, kernel, iterations=1)
+            processed = cv2.dilate(erode2, kernel, iterations=1)
+            times["morphology_time"] = (time.perf_counter_ns() - start_time) / 1000
+            
+            # Convert back to PIL Image
+            processed = processed.astype(np.uint8)
+            processed_images[key] = Image.fromarray(processed, mode='L')
+            
+            # Calculate total time
+            times["total_time"] = sum(v for k, v in times.items() if k != "image_name")
+            timing_data.append(times)
+            
+            logger.debug(f"Successfully processed {key}")
+            
+        except Exception as e:
+            logger.error(f"Error processing image {key}: {str(e)}")
+            logger.exception("Full traceback:")
+            continue
+    
+    if not processed_images:
+        raise ValueError("No images were successfully processed")
     
     timing_df = pd.DataFrame(timing_data)
-    
-    # Round all numeric columns to 2 decimal places
     numeric_columns = timing_df.select_dtypes(include=['float64']).columns
     timing_df[numeric_columns] = timing_df[numeric_columns].round(2)
     
+    logger.info(f"Successfully processed {len(processed_images)} images")
     return processed_images, timing_df
 
 def load_label_masks(
@@ -181,7 +230,7 @@ def load_label_masks(
 
 
 def compare_masks_cv2_sam(
-    cv_processed: Dict[str, Callable[[], Any]],
+    cv_processed: Dict[str, Image.Image],
     reconstructed_sam_masks: Dict[str, Image.Image]
 ) -> pd.DataFrame:
     """
@@ -198,30 +247,20 @@ def compare_masks_cv2_sam(
     
     # Convert images to numpy arrays first, making sure to call the load functions
     cv_arrays = {}
-    for k, load_func in cv_processed.items():
+    for k, img in cv_processed.items():
         try:
             standardized_key = _standardize_key(k)
-            # Call the load function and convert to numpy array
-            img = load_func()  # Actually load the image
-            if isinstance(img, Image.Image):
-                cv_arrays[standardized_key] = np.array(img)
-            else:
-                cv_arrays[standardized_key] = np.array(img)
+            cv_arrays[standardized_key] = np.array(img)
             logger.debug(f"Loaded CV mask {k} with shape {cv_arrays[standardized_key].shape}")
         except Exception as e:
             logger.error(f"Error loading CV image {k}: {str(e)}")
             continue
     
     sam_arrays = {}
-    for k, load_func in reconstructed_sam_masks.items():
+    for k, img in reconstructed_sam_masks.items():
         try:
             standardized_key = _standardize_key(k)
-            # Call the load function and convert to numpy array
-            img = load_func()  # Actually load the image
-            if isinstance(img, Image.Image):
-                sam_arrays[standardized_key] = np.array(img)
-            else:
-                sam_arrays[standardized_key] = np.array(img)
+            sam_arrays[standardized_key] = np.array(img)
             logger.debug(f"Loaded SAM mask {k} with shape {sam_arrays[standardized_key].shape}")
         except Exception as e:
             logger.error(f"Error loading SAM mask {k}: {str(e)}")
@@ -232,6 +271,8 @@ def compare_masks_cv2_sam(
     
     if not common_keys:
         logger.warning("No matching image keys found between CV and SAM datasets")
+        logger.warning(f"CV keys: {list(cv_arrays.keys())}")
+        logger.warning(f"SAM keys: {list(sam_arrays.keys())}")
         return pd.DataFrame()
     
     logger.info(f"Found {len(common_keys)} matching image pairs")
@@ -333,33 +374,36 @@ def reconstruct_sam_masks(
     return tiff_masks
 
 def create_mask_overlays(
-    cv_processed: Dict[str, Callable[[], Any]],
+    cv_processed: Dict[str, Image.Image],  # Changed from Dict[str, Callable[[], Any]]
     reconstructed_sam_masks: Dict[str, Image.Image],
     original_images: Dict[str, Image.Image],
     roi: pd.DataFrame
 ) -> Tuple[Dict[str, Image.Image], Dict[str, Image.Image], Dict[str, Image.Image]]:
     """
     Create overlay visualizations combining original images with masks.
-    
-    Args:
-        cv_processed: Kedro PartitionedDataSet containing CV processed masks
-        reconstructed_sam_masks: Kedro PartitionedDataSet containing SAM masks
-        original_images: Kedro PartitionedDataSet containing original images
-        roi: DataFrame containing ROI coordinates (x, y, width, height)
-        
-    Returns:
-        Tuple of three dictionaries:
-        - CV overlay images
-        - SAM overlay images
-        - Combined overlay images
     """
     logger.info("Creating mask overlays")
     
-    # Get common keys between the image datasets only
-    common_keys = set(cv_processed.keys()) & set(reconstructed_sam_masks.keys()) & \
-                 set(k for k in original_images.keys() if k != 'background')
+    # Debug logging for keys
+    logger.debug(f"CV processed keys: {list(cv_processed.keys())}")
+    logger.debug(f"SAM mask keys: {list(reconstructed_sam_masks.keys())}")
+    logger.debug(f"Original image keys: {list(original_images.keys())}")
     
-    logger.info(f"Found {len(common_keys)} common keys between datasets")
+    # Standardize keys across all dictionaries
+    cv_keys = {_standardize_key(k): k for k in cv_processed.keys()}
+    sam_keys = {_standardize_key(k): k for k in reconstructed_sam_masks.keys()}
+    orig_keys = {_standardize_key(k): k for k in original_images.keys() 
+                 if k != 'background'}
+    
+    # Find common standardized keys
+    common_std_keys = set(cv_keys.keys()) & set(sam_keys.keys()) & set(orig_keys.keys())
+    
+    logger.info(f"Found {len(common_std_keys)} common keys between datasets")
+    if len(common_std_keys) == 0:
+        logger.warning("Key matching details:")
+        logger.warning(f"Standardized CV keys: {list(cv_keys.keys())}")
+        logger.warning(f"Standardized SAM keys: {list(sam_keys.keys())}")
+        logger.warning(f"Standardized original keys: {list(orig_keys.keys())}")
     
     OPACITY = 0.2
     COLOR_CV = (255, 0, 0)  # Red
@@ -376,12 +420,17 @@ def create_mask_overlays(
     w = roi['width'].iloc[0]
     h = roi['height'].iloc[0]
     
-    for key in sorted(common_keys):
+    for std_key in sorted(common_std_keys):
         try:
-            # Load all images
-            cv_mask = np.array(cv_processed[key]())
-            sam_mask = np.array(reconstructed_sam_masks[key]())
-            original = np.array(original_images[key]())
+            # Get original keys
+            cv_key = cv_keys[std_key]
+            sam_key = sam_keys[std_key]
+            orig_key = orig_keys[std_key]
+            
+            # Load all images (now directly accessible, no need to call load function)
+            cv_mask = np.array(cv_processed[cv_key])
+            sam_mask = np.array(reconstructed_sam_masks[sam_key])
+            original = np.array(original_images[orig_key])
 
             # Crop original image to ROI
             original_cropped = original[y:y+h, x:x+w]
@@ -396,23 +445,21 @@ def create_mask_overlays(
             
             # Verify shapes match
             if cv_mask.shape[:2] != original_cropped.shape[:2] or sam_mask.shape[:2] != original_cropped.shape[:2]:
-                logger.warning(f"Shape mismatch for {key}:")
+                logger.warning(f"Shape mismatch for {std_key}:")
                 logger.warning(f"CV mask: {cv_mask.shape}, SAM mask: {sam_mask.shape}, Original: {original_cropped.shape}")
                 continue
 
-            # 1. Original + CV mask overlay
+            # Create overlays (rest of the overlay creation code remains the same)
             cv_overlay = original_cropped.copy()
             cv_overlay[cv_mask == 1] = cv_overlay[cv_mask == 1] * (1 - OPACITY) + \
                                      np.array(COLOR_CV) * OPACITY
-            cv_overlays[key] = Image.fromarray(cv_overlay.astype(np.uint8))
+            cv_overlays[std_key] = Image.fromarray(cv_overlay.astype(np.uint8))
             
-            # 2. Original + SAM mask overlay
             sam_overlay = original_cropped.copy()
             sam_overlay[sam_mask == 1] = sam_overlay[sam_mask == 1] * (1 - OPACITY) + \
                                        np.array(COLOR_SAM) * OPACITY
-            sam_overlays[key] = Image.fromarray(sam_overlay.astype(np.uint8))
+            sam_overlays[std_key] = Image.fromarray(sam_overlay.astype(np.uint8))
             
-            # 3. Original + both masks overlay
             combined_overlay = original_cropped.copy()
             combined_overlay[cv_mask == 1] = combined_overlay[cv_mask == 1] * (1 - OPACITY) + \
                                            np.array(COLOR_CV) * OPACITY
@@ -421,13 +468,13 @@ def create_mask_overlays(
             overlap = (cv_mask == 1) & (sam_mask == 1)
             combined_overlay[overlap] = combined_overlay[overlap] * (1 - OPACITY) + \
                                      np.array(COLOR_BOTH) * OPACITY
-            combined_overlays[key] = Image.fromarray(combined_overlay.astype(np.uint8))
+            combined_overlays[std_key] = Image.fromarray(combined_overlay.astype(np.uint8))
             
-            logger.debug(f"Created overlays for image {key}")
+            logger.debug(f"Created overlays for image {std_key}")
             
         except Exception as e:
-            logger.error(f"Error creating overlays for image {key}: {str(e)}")
+            logger.error(f"Error creating overlays for image {std_key}: {str(e)}")
             continue
     
-    logger.info(f"Successfully created overlays for {len(common_keys)} images")
+    logger.info(f"Successfully created overlays for {len(common_std_keys)} images")
     return cv_overlays, sam_overlays, combined_overlays
