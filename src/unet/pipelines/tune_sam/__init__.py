@@ -1,5 +1,5 @@
 """
-This is a boilerplate pipeline 'sam_predictor'
+This is a boilerplate pipeline 'tune_sam'
 generated using Kedro 0.19.9
 """
 

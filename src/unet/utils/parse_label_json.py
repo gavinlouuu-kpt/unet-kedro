@@ -10,17 +10,16 @@ class LabelParser:
     @staticmethod
     def _get_image_number(filename: str) -> str:
         """
-        Extract last 4-digit sequence from filename.
+        Extract number between underscore and dot in filename.
         Example:
-        - f006418c-0078.png -> 0078
-        - image.0059.png -> 0059
+        - e054e7f2-image_6.png -> 6
+        - image_123.jpg -> 123
+        - test_45.jpeg -> 45
         """
-        # Find all sequences of digits in the filename
-        numbers = re.findall(r'\d{4}', filename)
-        if numbers:
-            # Take the last 4-digit sequence found
-            return numbers[-1]  # Changed from [0] to [-1]
-        logger.warning(f"No 4-digit sequence found in filename: {filename}")
+        match = re.search(r'_(\d+)\.', filename)
+        if match:
+            return match.group(1)
+        logger.warning(f"No number found between underscore and dot in filename: {filename}")
         return None
 
     @staticmethod

@@ -1,0 +1,17 @@
+# This is a boilerplate parameters config generated for pipeline 'tune_sam'
+# using Kedro 0.19.9.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.9/configuration/parameters.html
+
+tune_sam:
+  model_type: vit_h # or vit_h, vit_b, vit_t
+  checkpoint: data/06_models/sam_weights/sam_vit_h_4b8939.pth
+  device: cuda
+  val_split: 0.2
+  random_seed: 42
+  learining_rate: 0.0001
+  epochs: 30
+  batch_size: 1
+  num_workers: 2
+  patience: 5

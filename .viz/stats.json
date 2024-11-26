@@ -1,1 +1,1 @@
-{"In_focus.general_roi_coordinates": {"rows": 1, "columns": 4}, "Slight_under_focus.general_roi_coordinates": {"rows": 1, "columns": 4}, "In_focus.cv_processed_timing": {"rows": 96, "columns": 6}, "Slight_under_focus.cv_processed_timing": {"rows": 109, "columns": 6}, "In_focus.mask_comparison_metrics": {"rows": 91, "columns": 7}, "Slight_under_focus.mask_comparison_metrics": {"rows": 93, "columns": 7}}
+{"paa_12_roi": {"rows": 1, "columns": 4, "file_size": 31}}

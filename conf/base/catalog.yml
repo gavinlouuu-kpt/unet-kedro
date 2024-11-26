@@ -9,38 +9,19 @@
   path: data/01_raw/{namespace}/
   filename_suffix: ".tiff"
 
-# original_Slight_under_focus_partition:
-#   type: partitions.PartitionedDataset
-#   dataset: pillow.ImageDataset
-#   path: data/01_raw/Slight_under_focus/
-#   filename_suffix: ".tiff"
-
 "{namespace}.filtered_images":
   type: pickle.PickleDataset
   filepath: data/02_intermediate/opencv_benchmark/filtered_images/{namespace}/{namespace}.pkl
-
-# filtered_Slight_under_focus:
-#   type: pickle.PickleDataset
-#   filepath: data/02_intermediate/opencv_benchmark/filtered_images/Slight_under_focus_images.pkl
 
 # Segmentation labels
 "{namespace}.segmentation_labels":
   type: json.JSONDataset
   filepath: data/01_raw/{namespace}/{namespace}.json
 
-# segmentation_labels_Slight_under_focus:
-#   type: json.JSONDataset
-#   filepath: data/01_raw/Slight_under_focus/Slight_under_focus.json
-
 # Reconstructed masks
 "{namespace}.reconstructed_sam_masks":
   type: pickle.PickleDataset
   filepath: data/02_intermediate/opencv_benchmark/sam_masks/{namespace}.pkl
-
-# reconstructed_sam_masks_Slight_under_focus:
-#   type: pickle.PickleDataset
-#   filepath: data/02_intermediate/opencv_benchmark/sam_masks/Slight_under_focus.pkl
-
 
 # Opencv processed images
 "{namespace}.general_roi_coordinates":
@@ -55,30 +36,12 @@
   type: pandas.CSVDataset
   filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/{namespace}/{namespace}_cv_processed_timing.csv
 
-# "cv_processed_{namespace}":
-#   type: pickle.PickleDataset
-#   filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/Slight_under_focus/Slight_under_focus.pkl
-
-# cv_processed_timing_Slight_under_focus:
-#   type: pandas.CSVDataset
-#   filepath: data/02_intermediate/opencv_benchmark/cv_processed_images/Slight_under_focus/cv_processed_timing_Slight_under.csv
-
-# Opencv plots and figures
-# with different params on In_focus and Slight_under compare iou and dice to SAM
-
-
 # Comparison metrics between SAM and OpenCV
 "{namespace}.mask_comparison_metrics":
   type: pandas.CSVDataset
   filepath: data/08_reporting/opencv_benchmark/{namespace}_mask_comparison_metrics.csv
   save_args:
     index: False
-
-# mask_comparison_metrics_Slight_under_focus:
-#   type: pandas.CSVDataset
-#   filepath: data/08_reporting/opencv_benchmark/mask_comparison_metrics_Slight_under_focus.csv
-#   save_args:
-#     index: False
 
 "{namespace}.cv_overlays":
   type: partitions.PartitionedDataset
@@ -97,24 +60,6 @@
   path: data/08_reporting/opencv_benchmark/overlays/{namespace}/combined
   filename_suffix: ".png"
   dataset: pillow.ImageDataset
-
-# Slight_under_focus_cv_overlays:
-#   type: partitions.PartitionedDataset
-#   path: data/08_reporting/opencv_benchmark/overlays/Slight_under_focus/cv
-#   filename_suffix: ".png"
-#   dataset: pillow.ImageDataset
-
-# Slight_under_focus_sam_overlays:
-#   type: partitions.PartitionedDataset
-#   path: data/08_reporting/opencv_benchmark/overlays/Slight_under_focus/sam
-#   filename_suffix: ".png"
-#   dataset: pillow.ImageDataset
-
-# Slight_under_focus_combined_overlays:
-#   type: partitions.PartitionedDataset
-#   path: data/08_reporting/opencv_benchmark/overlays/Slight_under_focus/combined
-#   filename_suffix: ".png"
-#   dataset: pillow.ImageDataset
 
 ######################### SAM prediction pipeline
 
@@ -137,13 +82,13 @@ prompted_sam_masks_In_focus:
   dataset: pillow.ImageDataset
   path: data/07_model_output/sam_prediction/In_focus/
   filename_suffix: ".tiff"
-  
+
 prompted_sam_masks_Slight_under_focus:
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
   path: data/07_model_output/sam_prediction/Slight_under_focus/
   filename_suffix: ".tiff"
-  
+
 # Timing data outputs
 sam_prediction_timing_In_focus:
   type: pandas.CSVDataset
@@ -176,3 +121,18 @@ val_dataset:
 trained_unet:
   type: pickle.PickleDataset
   filepath: data/06_models/model_training/unet_model.pkl
+
+# fine-tuning sam
+paa_12_label:
+  type: json.JSONDataset
+  filepath: data/01_raw/tune_data/paa_12/paa_12_200.json
+
+paa_12_image:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/01_raw/tune_data/paa_12/
+  filename_suffix: ".png"
+
+paa_12_roi:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/tune_data/paa_12/roi.csv
