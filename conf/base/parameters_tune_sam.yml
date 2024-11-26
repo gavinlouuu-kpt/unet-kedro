@@ -5,13 +5,15 @@
 # Link: https://docs.kedro.org/en/0.19.9/configuration/parameters.html
 
 tune_sam:
-  model_type: vit_h # or vit_h, vit_b, vit_t
-  checkpoint: data/06_models/sam_weights/sam_vit_h_4b8939.pth
+  model_type: vit_l # or vit_h, vit_b, vit_t
+  checkpoint: data/06_models/sam_weights/sam_vit_l_0b3195.pth
   device: cuda
   val_split: 0.2
   random_seed: 42
-  learining_rate: 0.0001
+  learning_rate: 0.01
   epochs: 30
   batch_size: 1
   num_workers: 2
   patience: 5
+  vis_frequency: 10
+  vis_dir: data/08_reporting/sam

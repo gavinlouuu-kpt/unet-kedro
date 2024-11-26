@@ -24,18 +24,18 @@ def initialize_sam_base(parameters: Dict[str, Any]) -> Any:
     model_type = parameters["model_type"]
     device = parameters["device"]
     checkpoint = parameters["checkpoint"]
-
+    learning_rate = parameters["learning_rate"]
     # Initialize the base model
     sam = sam_model_registry[model_type](checkpoint=checkpoint)
     
-    # Freeze everything except mask decoder
-    for param in sam.parameters():
-        param.requires_grad = False
-    for param in sam.mask_decoder.parameters():
-        param.requires_grad = True
+    # # Freeze everything except mask decoder
+    # for param in sam.parameters():
+    #     param.requires_grad = False
+    # for param in sam.mask_decoder.parameters():
+    #     param.requires_grad = True
     
     sam.to(device)
-    optimizer = torch.optim.Adam(sam.mask_decoder.parameters()) 
+    optimizer = torch.optim.Adam(sam.mask_decoder.parameters(), lr=learning_rate) 
     
     return sam, optimizer
 
@@ -168,6 +168,38 @@ class SAMDataset(Dataset):
         
         return image, mask, box
 
+def visualize_prediction(image, pred_mask, gt_mask, epoch, batch_idx, save_dir):
+    """Visualize the prediction, ground truth, and overlay."""
+    plt.figure(figsize=(15, 5))
+    
+    # Convert image from CHW to HWC format and denormalize
+    image_np = image.cpu().permute(1, 2, 0).numpy()
+    pred_mask_np = pred_mask.cpu().squeeze().detach().numpy()
+    gt_mask_np = gt_mask.cpu().detach().numpy()
+    
+    # Plot original image
+    plt.subplot(1, 3, 1)
+    plt.imshow(image_np)
+    plt.title('Original Image')
+    plt.axis('off')
+    
+    # Plot prediction
+    plt.subplot(1, 3, 2)
+    plt.imshow(pred_mask_np, cmap='gray')
+    plt.title('Prediction')
+    plt.axis('off')
+    
+    # Plot ground truth
+    plt.subplot(1, 3, 3)
+    plt.imshow(gt_mask_np, cmap='gray')
+    plt.title('Ground Truth')
+    plt.axis('off')
+    
+    # Save the figure
+    save_path = Path(save_dir) / f'epoch_{epoch}_batch_{batch_idx}.png'
+    plt.savefig(save_path)
+    plt.close()
+
 def train_sam(
     sam_model: Any,
     optimizer: torch.optim.Optimizer,
@@ -178,6 +210,7 @@ def train_sam(
     device = params.get('device', 'cuda')
     num_epochs = params.get('num_epochs', 10)
     batch_size = params.get('batch_size', 1)
+    batch_losses = []
 
     train_data = training_data['train']
     val_data = training_data['val']
@@ -189,61 +222,46 @@ def train_sam(
     val_dataset = SAMDataset(val_data['images'], val_data['masks'], val_data['box_prompt'])
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
 
-    loss_fn = nn.MSELoss()
+    loss_fn = nn.BCEWithLogitsLoss()
     history = {'train_loss': [], 'val_loss': []}
 
+    # Add visualization parameters
+    vis_frequency = params.get('vis_frequency', 50)  # Visualize every 50 batches
+    vis_dir = Path(params.get('vis_dir', 'visualization_output'))
+    vis_dir.mkdir(exist_ok=True)
+
     for epoch in range(num_epochs):
-        # Training phase
         sam_model.train()
         train_loss = 0.0
+        num_batches = 0  # Add counter for proper averaging
         
         for batch_idx, (images, gt_masks, boxes) in enumerate(train_loader):
             images = images.to(device)
             gt_masks = gt_masks.to(device)
             boxes = boxes.to(device)
 
-            # # Add debug logging
-            # logger.info(f"Batch shapes:")
-            # logger.info(f"Images shape: {images.shape}")
-            # logger.info(f"GT masks shape: {gt_masks.shape}")
-            # logger.info(f"Boxes shape: {boxes.shape}")
+            # Zero gradients at start of each batch
+            optimizer.zero_grad()
 
-            with torch.no_grad():
-                image_embeddings = sam_model.image_encoder(images)
-                # logger.info(f"Image embeddings shape: {image_embeddings.shape}")
-                
-                sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
-                    points=None,
-                    boxes=boxes,
-                    masks=None,
-                )
-                # logger.info(f"Sparse embeddings shape: {sparse_embeddings.shape}")
-                # logger.info(f"Dense embeddings shape: {dense_embeddings.shape}")
-                # logger.info(f"PE shape: {sam_model.prompt_encoder.get_dense_pe().shape}")
+            # Remove the torch.no_grad() block - we need gradients for training
+            image_embeddings = sam_model.image_encoder(images)
+            sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                points=None,
+                boxes=boxes,
+                masks=None,
+            )
 
-            # Generate masks
-            try:
-                # Get PE and expand to match batch size
-                image_pe = sam_model.prompt_encoder.get_dense_pe()
-                image_pe = image_pe.expand(batch_size, -1, -1, -1)
-                
-                # # Log all input shapes
-                # logger.info("Shapes going into mask decoder:")
-                # logger.info(f"image_embeddings shape: {image_embeddings.shape}")
-                # logger.info(f"image_pe shape: {image_pe.shape}")
-                # logger.info(f"sparse_prompt_embeddings shape: {sparse_embeddings.shape}")
-                # logger.info(f"dense_prompt_embeddings shape: {dense_embeddings.shape}")
-                
-                low_res_masks, _ = sam_model.mask_decoder(
-                    image_embeddings=image_embeddings,
-                    image_pe=image_pe,
-                    sparse_prompt_embeddings=sparse_embeddings, 
-                    dense_prompt_embeddings=dense_embeddings,
-                    multimask_output=False,
-                )
-            except RuntimeError as e:
-                logger.error(f"Error in mask decoder: {str(e)}")
-                raise
+            # Get PE and expand to match batch size
+            image_pe = sam_model.prompt_encoder.get_dense_pe()
+            image_pe = image_pe.expand(batch_size, -1, -1, -1)
+            
+            low_res_masks, _ = sam_model.mask_decoder(
+                image_embeddings=image_embeddings,
+                image_pe=image_pe,
+                sparse_prompt_embeddings=sparse_embeddings, 
+                dense_prompt_embeddings=dense_embeddings,
+                multimask_output=False,
+            )
 
             # Postprocess masks
             upscaled_masks = sam_model.postprocess_masks(
@@ -252,22 +270,67 @@ def train_sam(
                 original_size=images.shape[-2:]
             ).to(device)
 
-            binary_masks = F.normalize(F.threshold(upscaled_masks, 0.0, 0))
-
-            # Calculate loss and optimize
-            loss = loss_fn(binary_masks, gt_masks.unsqueeze(1))
-            optimizer.zero_grad()
+            # Calculate loss directly with BCEWithLogitsLoss
+            loss = loss_fn(upscaled_masks, gt_masks.unsqueeze(1))
+            batch_losses.append(loss.item())
+             # Proper loss accumulation
+            train_loss += loss.item()
+            num_batches += 1
+            # Backward and optimize
             loss.backward()
+
+            # Check gradients for first batch of each epoch
+            if batch_idx == 0:  # Check first batch of each epoch
+                logger.info(f"Epoch {epoch} gradients:")
+                for name, param in sam_model.mask_decoder.named_parameters():
+                    if param.grad is not None:
+                        grad_norm = param.grad.norm().item()
+                        logger.info(f"{name}: grad_norm = {grad_norm}")
+                        if grad_norm == 0:
+                            logger.warning(f"Zero gradient for {name}!")
+                            
+                with torch.no_grad():
+                    pred_unique = torch.sigmoid(upscaled_masks[0]).unique()
+                    gt_unique = gt_masks[0].unique()
+                    logger.info(f"Epoch {epoch} - Prediction values: {pred_unique}")
+                    logger.info(f"Epoch {epoch} - Ground truth values: {gt_unique}")
+                    logger.info(f"Prediction mean: {torch.sigmoid(upscaled_masks[0]).mean():.4f}")
+                    logger.info(f"Ground truth mean: {gt_masks[0].mean():.4f}")
+
             optimizer.step()
 
-            train_loss += loss.item()
+            # log the loss every 10 batches with the epoch and batch index
+            if batch_idx % 10 == 0:
+                logger.info(f"Epoch {epoch}, Batch {batch_idx} - Loss: {loss.item()}")
 
-        avg_train_loss = train_loss / len(train_loader)
+            # Add debugging prints
+            if batch_idx == 0:
+                logger.info(f"Loss value: {loss.item()}")
+                # logger.info(f"Grad norms: {[p.grad.norm().item() for p in sam_model.mask_decoder.parameters() if p.grad is not None]}")
+
+            # Add visualization
+            if batch_idx % vis_frequency == 0:
+                visualize_prediction(
+                    images[0],  # Take first image from batch
+                    torch.sigmoid(upscaled_masks[0]),  # Take first prediction and apply sigmoid for visualization
+                    gt_masks[0],  # Take first ground truth
+                    epoch,
+                    batch_idx,
+                    vis_dir
+                )
+
+        # Correct averaging
+        avg_train_loss = train_loss / num_batches
         history['train_loss'].append(avg_train_loss)
+        # Add debugging prints
+        logger.info(f"Raw train_loss: {train_loss}, num_batches: {num_batches}")
+        # logger.info(f"Train batch losses: {batch_losses}")
 
         # Validation phase
         sam_model.eval()
         val_loss = 0.0
+        val_batch_losses = []
+        num_val_batches = 0  # Add counter for validation too
         
         with torch.no_grad():
             for images, gt_masks, boxes in val_loader:
@@ -296,11 +359,14 @@ def train_sam(
                     original_size=images.shape[-2:]
                 ).to(device)
 
-                binary_masks = F.normalize(F.threshold(upscaled_masks, 0.0, 0))
-                loss = loss_fn(binary_masks, gt_masks.unsqueeze(1))
+                loss = loss_fn(upscaled_masks, gt_masks.unsqueeze(1))
                 val_loss += loss.item()
+                val_batch_losses.append(loss.item())
+                num_val_batches += 1
 
-        avg_val_loss = val_loss / len(val_loader)
+        avg_val_loss = val_loss / num_val_batches
+        logger.info(f"Raw val_loss: {val_loss}, num_val_batches: {num_val_batches}")
+        # logger.info(f"Val batch losses: {val_batch_losses}")
         history['val_loss'].append(avg_val_loss)
         
         logger.info(f"Epoch {epoch+1}/{num_epochs} - "
