@@ -29,14 +29,14 @@ def initialize_sam_base(parameters: Dict[str, Any]) -> Any:
     sam = sam_model_registry[model_type](checkpoint=checkpoint)
     
     # # Freeze everything except mask decoder
-    # for param in sam.parameters():
-    #     param.requires_grad = False
-    # for param in sam.mask_decoder.parameters():
-    #     param.requires_grad = True
+    for param in sam.parameters():
+        param.requires_grad = False
+    for param in sam.mask_decoder.parameters():
+        param.requires_grad = True
     
     sam.to(device)
     optimizer = torch.optim.Adam(sam.mask_decoder.parameters(), lr=learning_rate) 
-    
+    # optimizer = torch.optim.SGD(sam.parameters(), lr=learning_rate)
     return sam, optimizer
 
 def prepare_masks(label_json: List[Dict]) -> Dict[str, np.ndarray]:
@@ -278,25 +278,6 @@ def train_sam(
             num_batches += 1
             # Backward and optimize
             loss.backward()
-
-            # Check gradients for first batch of each epoch
-            if batch_idx == 0:  # Check first batch of each epoch
-                logger.info(f"Epoch {epoch} gradients:")
-                for name, param in sam_model.mask_decoder.named_parameters():
-                    if param.grad is not None:
-                        grad_norm = param.grad.norm().item()
-                        logger.info(f"{name}: grad_norm = {grad_norm}")
-                        if grad_norm == 0:
-                            logger.warning(f"Zero gradient for {name}!")
-                            
-                with torch.no_grad():
-                    pred_unique = torch.sigmoid(upscaled_masks[0]).unique()
-                    gt_unique = gt_masks[0].unique()
-                    logger.info(f"Epoch {epoch} - Prediction values: {pred_unique}")
-                    logger.info(f"Epoch {epoch} - Ground truth values: {gt_unique}")
-                    logger.info(f"Prediction mean: {torch.sigmoid(upscaled_masks[0]).mean():.4f}")
-                    logger.info(f"Ground truth mean: {gt_masks[0].mean():.4f}")
-
             optimizer.step()
 
             # log the loss every 10 batches with the epoch and batch index

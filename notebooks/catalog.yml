@@ -1,0 +1,14 @@
+# fine-tuning sam
+paa_12_label:
+  type: json.JSONDataset
+  filepath: ../data/01_raw/tune_data/paa_12/paa_12_200.json
+
+paa_12_image:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: ../data/01_raw/tune_data/paa_12/
+  filename_suffix: ".png"
+
+paa_12_roi:
+  type: pandas.CSVDataset
+  filepath: ../data/01_raw/tune_data/paa_12/roi.csv
