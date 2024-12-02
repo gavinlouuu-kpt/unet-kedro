@@ -12,3 +12,67 @@ paa_12_image:
 paa_12_roi:
   type: pandas.CSVDataset
   filepath: ../data/01_raw/tune_data/paa_12/roi.csv
+
+# inference
+# batch_paa_12:
+#   type: partitions.PartitionedDataset
+#   dataset: pillow.ImageDataset
+#   path: ../data/05_model_input/batch_1/
+#   filename_suffix: ".png"
+
+# batch_paa_10:
+#   type: partitions.PartitionedDataset
+#   dataset: pillow.ImageDataset
+#   path: ../data/05_model_input/PAA10/batch_0/
+#   filename_suffix: ".png"
+
+# batch_paa_8:
+#   type: partitions.PartitionedDataset
+#   dataset: pillow.ImageDataset
+#   path: ../data/05_model_input/PAA8/batch_0/
+#   filename_suffix: ".png"
+
+full_paa_12:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: ../data/05_model_input/PAA12/
+  filename_suffix: ".png"
+
+batch_paa_12_roi:
+  type: pandas.CSVDataset
+  filepath: ../data/05_model_input/batch_1/roi.csv
+
+full_paa_10:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: ../data/05_model_input/PAA10/
+  filename_suffix: ".png"
+
+batch_paa_10_roi:
+  type: pandas.CSVDataset
+  filepath: ../data/05_model_input/PAA10/batch_0/roi.csv
+
+full_paa_8:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: ../data/05_model_input/PAA8/
+  filename_suffix: ".png"
+
+batch_paa_8_roi:
+  type: pandas.CSVDataset
+  filepath: ../data/05_model_input/PAA8/batch_0/roi.csv
+
+# Prepare for pipeline catalog
+"{namespace}.raw_data":
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: data/05_model_input/{namespace}/
+  filename_suffix: ".png"
+
+"{namespace}.roi":
+  type: pandas.CSVDataset
+  filepath: data/05_model_input/{namespace}/roi.csv
+
+"{namespace}.prediction":
+  type: pickle.PickleDataset
+  filepath: data/07_model_output/{namespace}/prediction.pkl

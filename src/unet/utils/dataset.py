@@ -7,8 +7,90 @@ from PIL import Image
 from .parse_label_json import LabelParser
 import cv2
 import pandas as pd
+from transformers import SamProcessor, SamModel
 
 logger = logging.getLogger(__name__)
+
+
+class PrepareSAMDataset(Dataset):
+    def __init__(self, images_dict, roi, processor):
+        self.images = images_dict
+        self.roi = roi.iloc[0].values.astype(float)
+        self.processor = processor
+        self.keys = sorted(self.images.keys(), key=lambda x: int(x.split('_')[-1]) if x.split('_')[-1].isdigit() else float('inf'))
+
+
+    def __len__(self):
+        return len(self.keys)
+
+    def __getitem__(self, idx):
+        key = self.keys[idx]
+        image = self.images[key]()
+        # Store original image before processing
+        image = np.array(image)
+        image = np.stack([image] * 3, axis=-1) if image.ndim == 2 else image
+        original_image = image.copy()
+        # Convert ROI from x, y, width, height to x_min, y_min, x_max, y_max
+        x, y, width, height = self.roi
+        box_prompt = [x, y, x + width, y + height]
+
+        # Process the image
+        inputs = self.processor(
+            images=image,
+            input_boxes=[[box_prompt]],
+            return_tensors="pt"
+        )
+        
+        # Remove batch dimension
+        inputs = {k: v.squeeze(0) for k, v in inputs.items()}
+        
+        # Add original image to inputs
+        inputs["original_image"] = original_image
+
+        return inputs
+
+class SamInference:
+    def __init__(self, model_path, processor_path):
+        # Load the processor and model
+        self.processor = SamProcessor.from_pretrained(processor_path)
+        self.model = SamModel.from_pretrained(model_path)
+        self.model.eval()  # Set the model to evaluation mode
+        # Set model to device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(self.device)
+        print("Device: ", next(self.model.parameters()).device)
+
+    def perform_inference(self, dataloader):
+        results = []
+        for batch in dataloader:
+            pixel_values = batch['pixel_values'].to(self.device)
+            input_boxes = batch['input_boxes'].to(self.device)
+            original_image = batch['original_image']
+
+            # Perform inference
+            with torch.no_grad():
+                outputs = self.model(
+                    pixel_values=pixel_values,
+                    input_boxes=input_boxes,
+                    multimask_output=False
+                )
+                predicted_masks = outputs.pred_masks
+
+            # Post-process the predicted masks
+            masks = self.processor.image_processor.post_process_masks(
+                predicted_masks,
+                batch["original_sizes"],
+                batch["reshaped_input_sizes"]
+            )
+
+            # Store the original image and mask
+            results.append({
+                'original_image': original_image,
+                'masks': masks
+            })
+
+        return results
+    
 
 def filter_empty_frames(
     partition: Dict[str, Callable[[], Any]],
