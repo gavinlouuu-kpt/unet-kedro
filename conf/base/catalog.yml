@@ -82,7 +82,14 @@ model:
 
 "{namespace}.processed_predictions":
   type: pickle.PickleDataset
-  filepath: data/07_model_output/{namespace}/prediction.pkl
+  filepath: data/07_model_output/{namespace}/{namespace}prediction.pkl
 # ---------------------------------------------------------------------
 # CV provessing
 
+"{namespace}.cv_processed_set":
+  type: pickle.PickleDataset
+  filepath: data/07_model_output/{namespace}/{namespace}cv_processed.pkl
+
+"{namespace}.cv_processing_config":
+  type: json.JSONDataset
+  filepath: data/05_model_input/{namespace}/batch_1/processing_config.json
