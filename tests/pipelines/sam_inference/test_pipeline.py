@@ -1,5 +1,5 @@
 """
-This is a boilerplate test file for pipeline 'tune_sam'
+This is a boilerplate test file for pipeline 'sam_inference'
 generated using Kedro 0.19.9.
 Please add your pipeline tests here.
 

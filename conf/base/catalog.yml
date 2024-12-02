@@ -61,78 +61,28 @@
   filename_suffix: ".png"
   dataset: pillow.ImageDataset
 
-######################### SAM prediction pipeline
+# ---------------------------------------------------------------------
+# Sam bead inference
 
-# Cropped images for SAM prediction
-cropped_images_In_focus:
+processor:
+  type: MemoryDataset
+
+model:
+  type: MemoryDataset
+
+"{namespace}.raw_data":
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
-  path: data/05_model_input/sam_prediction/In_focus/
-  filename_suffix: ".tiff"
-
-cropped_images_Slight_under_focus:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/05_model_input/sam_prediction/Slight_under_focus/
-  filename_suffix: ".tiff"
-
-# SAM prediction outputs
-prompted_sam_masks_In_focus:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/07_model_output/sam_prediction/In_focus/
-  filename_suffix: ".tiff"
-
-prompted_sam_masks_Slight_under_focus:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/07_model_output/sam_prediction/Slight_under_focus/
-  filename_suffix: ".tiff"
-
-# Timing data outputs
-sam_prediction_timing_In_focus:
-  type: pandas.CSVDataset
-  filepath: data/07_model_output/sam_prediction/In_focus/timing_data.csv
-  save_args:
-    index: False
-
-sam_prediction_timing_Slight_under_focus:
-  type: pandas.CSVDataset
-  filepath: data/07_model_output/sam_prediction/Slight_under_focus/timing_data.csv
-  save_args:
-    index: False
-
-########################################################datascience pipeline
-
-# Paired Image to Segmentation dataset
-segmentation_dataset_In_focus:
-  type: pickle.PickleDataset
-  filepath: data/02_intermediate/model_training/segmentation_dataset.pkl
-
-# Training datasets
-train_dataset:
-  type: pickle.PickleDataset
-  filepath: data/02_intermediate/model_training/train_dataset.pkl
-
-val_dataset:
-  type: pickle.PickleDataset
-  filepath: data/02_intermediate/model_training/val_dataset.pkl
-
-trained_unet:
-  type: pickle.PickleDataset
-  filepath: data/06_models/model_training/unet_model.pkl
-
-# fine-tuning sam
-paa_12_label:
-  type: json.JSONDataset
-  filepath: data/01_raw/tune_data/paa_12/paa_12_200.json
-
-paa_12_image:
-  type: partitions.PartitionedDataset
-  dataset: pillow.ImageDataset
-  path: data/01_raw/tune_data/paa_12/
+  path: data/05_model_input/{namespace}/
   filename_suffix: ".png"
 
-paa_12_roi:
+"{namespace}.roi":
   type: pandas.CSVDataset
-  filepath: data/01_raw/tune_data/paa_12/roi.csv
+  filepath: data/05_model_input/{namespace}/batch_1/roi.csv
+
+"{namespace}.processed_predictions":
+  type: pickle.PickleDataset
+  filepath: data/07_model_output/{namespace}/prediction.pkl
+# ---------------------------------------------------------------------
+# CV provessing
+

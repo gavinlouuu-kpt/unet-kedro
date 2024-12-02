@@ -1,5 +1,5 @@
 """
-This is a boilerplate pipeline 'tutorial_tune_sam'
+This is a boilerplate pipeline 'cv_processing'
 generated using Kedro 0.19.9
 """
 

@@ -10,6 +10,7 @@ conf/**/*credentials*
 
 # ignore everything in the following folders
 data/**
+notebooks/reporting/**
 
 # except their sub-folders
 !data/**/

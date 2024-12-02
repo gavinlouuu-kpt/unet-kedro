@@ -1,0 +1,24 @@
+# This is a boilerplate parameters config generated for pipeline 'sam_inference'
+# using Kedro 0.19.9.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.9/configuration/parameters.html
+
+# PAA_12:
+#   sam_bead_inference:
+#     processor: "data/06_models/sam_bead_processor"
+#     model: "data/06_models/sam_bead"
+
+# PAA_10:
+#   sam_bead_inference:
+#     processor: "data/06_models/sam_bead_processor"
+#     model: "data/06_models/sam_bead"
+
+# PAA_8:
+#   sam_bead_inference:
+#     processor: "data/06_models/sam_bead_processor"
+#     model: "data/06_models/sam_bead"
+
+sam_bead_inference:
+  processor: "data/06_models/sam_bead_processor"
+  model: "data/06_models/sam_bead"
