@@ -5,7 +5,8 @@ from .nodes import (
     contour_process_cv,
     create_cv_data_dict,
     prepare_cv_dataset,
-    run_processing
+    run_processing,
+    contour_process_cv
 )
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -43,8 +44,14 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=run_processing,
                 inputs=["cv_dataset", "cv_processing_config"],
-                outputs="cv_processed_contours",
+                outputs="cv_processed",
                 name="run_cv_processing"
+            ),
+            node(
+                func=contour_process_cv,
+                inputs="cv_processed",
+                outputs="cv_processed_contours",
+                name="processing_contours"
             )
         ]
     )

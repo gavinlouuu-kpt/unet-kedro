@@ -78,25 +78,25 @@ batch_paa_8_roi:
   filepath: data/07_model_output/{namespace}/prediction.pkl
 
 # explore pkl files
-paa_8_cv:
-  type: pickle.PickleDataset
-  filepath: ../data/07_model_output/PAA_8/PAA_8cv_processed.pkl
+# paa_8_cv:
+#   type: pickle.PickleDataset
+#   filepath: ../data/07_model_output/PAA_8/PAA_8cv_processed.pkl
 
-paa_10_cv:
-  type: pickle.PickleDataset
-  filepath: ../data/07_model_output/PAA_10/PAA_10cv_processed.pkl
+# paa_10_cv:
+#   type: pickle.PickleDataset
+#   filepath: ../data/07_model_output/PAA_10/PAA_10cv_processed.pkl
 
 paa_12_cv:
   type: pickle.PickleDataset
-  filepath: ../data/07_model_output/PAA_12/PAA_12cv_processed.pkl
+  filepath: ../data/07_model_output/CV/PAA_12_cv_processed_contours.pkl
 
-paa_8_sam:
-  type: pickle.PickleDataset
-  filepath: ../data/07_model_output/PAA_8/prediction.pkl
+# paa_8_sam:
+#   type: pickle.PickleDataset
+#   filepath: ../data/07_model_output/PAA_8/prediction.pkl
 
-paa_10_sam:
-  type: pickle.PickleDataset
-  filepath: ../data/07_model_output/PAA_10/prediction.pkl
+# paa_10_sam:
+#   type: pickle.PickleDataset
+#   filepath: ../data/07_model_output/PAA_10/prediction.pkl
 
 paa_12_sam:
   type: pickle.PickleDataset

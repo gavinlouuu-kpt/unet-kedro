@@ -11,6 +11,28 @@ from transformers import SamProcessor, SamModel
 
 logger = logging.getLogger(__name__)
 
+
+def load_partition_dict(partition_dict: Dict[str, Any]) -> Dict[str, Any]:
+    logger.info(f"Loading {len(partition_dict)} partitions")
+    
+    loaded_data = {}
+    for key, value in partition_dict.items():
+        logger.info(f"Processing partition: {key}")
+        
+        try:
+            if hasattr(value, 'load'):
+                loaded_data[key] = value.load()
+                logger.info(f"Loaded partition {key} using load() method")
+            else:
+                loaded_data[key] = value
+                logger.info(f"Using direct value for partition {key}")
+        except Exception as e:
+            logger.error(f"Failed to load partition {key}: {e}")
+            continue
+    
+    logger.info(f"Successfully loaded {len(loaded_data)} partitions")
+    return loaded_data
+
 # sam_inference
 
 class PrepareSAMDataset(Dataset):

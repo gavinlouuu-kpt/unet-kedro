@@ -122,8 +122,9 @@ def contour_process_cv(processed_images):
     for key, result in processed_images.items():
         contours_info = []
         for mask in result['masks']:
-            # Convert mask to numpy array if it's not already
-            mask = mask.cpu().numpy()
+            if hasattr(mask, 'numpy'):
+                # Convert mask to numpy array if it's not already
+                mask = mask.numpy()
             
             if mask.ndim == 4:
                 mask = mask.squeeze(0).squeeze(0)

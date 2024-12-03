@@ -82,13 +82,9 @@ model:
 
 "{namespace}.processed_predictions":
   type: pickle.PickleDataset
-  filepath: data/07_model_output/{namespace}/{namespace}_prediction.pkl
+  filepath: data/07_model_output/SAM/{namespace}_sam_prediction.pkl
 # ---------------------------------------------------------------------
 # CV provessing
-
-# "{namespace}.cv_processed_set":
-#   type: pickle.PickleDataset
-#   filepath: data/07_model_output/{namespace}/{namespace}_cv_processed.pkl
 
 "{namespace}.cv_processing_config":
   type: json.JSONDataset
@@ -96,4 +92,32 @@ model:
 
 "{namespace}.cv_processed_contours":
   type: pickle.PickleDataset
-  filepath: data/07_model_output/{namespace}/{namespace}_cv_processed_contours.pkl
+  filepath: data/07_model_output/CV/{namespace}_cv_processed_contours.pkl
+
+# ---------------------------------------------------------------------
+# Reporting
+
+"{namespace}collection":
+  type: partitions.PartitionedDataset
+  path: data/07_model_output/{namespace}
+  filename_suffix: ".pkl"
+  dataset: pickle.PickleDataset
+
+"{namespace}mask_overlays":
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/mask_overlays/{namespace}/
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+"{namespace}scatter_plots":
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/scatter_plots/{namespace}/
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+"{namespace}DI_pts":
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/scatter_plots/{namespace}/
+  filename_suffix: ".csv"
+  dataset: pandas.CSVDataset
+
