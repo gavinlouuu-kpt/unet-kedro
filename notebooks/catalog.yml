@@ -100,4 +100,4 @@ paa_12_cv:
 
 paa_12_sam:
   type: pickle.PickleDataset
-  filepath: ../data/07_model_output/PAA_12/PAA_12_prediction.pkl
+  filepath: ../data/07_model_output/SAM/PAA_12_sam_prediction.pkl

@@ -121,3 +121,12 @@ model:
   filename_suffix: ".csv"
   dataset: pandas.CSVDataset
 
+"{namespace}combined_scatter_plot":
+  type: pillow.ImageDataset
+  filepath: data/08_reporting/scatter_plots/{namespace}/{namespace}combined_scatter_plot.png
+
+"{namespace}interactive_scatter_plots":
+  type: text.TextDataset
+  filepath: data/08_reporting/interactive_scatter_plots/{namespace}/{namespace}_interactive_scatter_plots.html
+
+

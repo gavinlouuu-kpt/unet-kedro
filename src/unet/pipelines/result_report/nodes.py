@@ -13,6 +13,8 @@ from io import BytesIO
 from PIL import Image
 import logging
 import pandas as pd
+from scipy.stats import gaussian_kde
+import torch  # Assuming PyTorch tensors, adjust if using a different library
 
 logger = logging.getLogger(__name__)
 
@@ -105,9 +107,10 @@ def create_mask_overlays(collection: Dict[str, Any]) -> List[OverlayFigure]:
     logger.info(f"Created {len(overlay_figures)} overlay figures")
     return overlay_figures
 
-def create_scatter_plots_with_csv(collection: Dict[str, Any]) -> Tuple[Dict[str, Image.Image], Dict[str, pd.DataFrame]]:
+def create_scatter_plots_with_csv(collection: Dict[str, Any]) -> Tuple[Dict[str, Image.Image], Dict[str, pd.DataFrame], Image.Image]:
     """
-    Creates individual scatter plots and corresponding CSV files for each PKL file
+    Creates individual scatter plots and corresponding CSV files for each PKL file,
+    and a combined scatter plot integrating all data.
     
     Args:
         collection: Dictionary containing the results
@@ -116,21 +119,24 @@ def create_scatter_plots_with_csv(collection: Dict[str, Any]) -> Tuple[Dict[str,
         Tuple containing:
         - Dictionary mapping keys to PIL Images of scatter plots
         - Dictionary mapping keys to pandas DataFrames for CSV files
+        - PIL Image of combined scatter plot
     """
     scatter_plots = {}
     csv_data = {}
+    all_areas = []
+    all_deformabilities = []
     
     # Process each PKL file
     for pkl_name, value in collection.items():
-        logger.info(f"Processing PKL: {pkl_name}")
+        # logger.info(f"Processing PKL: {pkl_name}")
         
         # Load data on-demand
         if callable(value):
             try:
                 result = value()
-                logger.info(f"Successfully loaded data for {pkl_name}")
+                # logger.info(f"Successfully loaded data for {pkl_name}")
             except Exception as e:
-                logger.error(f"Error loading data for {pkl_name}: {e}")
+                # logger.error(f"Error loading data for {pkl_name}: {e}")
                 continue
         else:
             result = value
@@ -147,14 +153,26 @@ def create_scatter_plots_with_csv(collection: Dict[str, Any]) -> Tuple[Dict[str,
                     if isinstance(contour_info, dict) and 'area' in contour_info and 'deformability' in contour_info:
                         areas.append(contour_info['area'])
                         deformabilities.append(contour_info['deformability'])
+                        all_areas.append(contour_info['area'])
+                        all_deformabilities.append(contour_info['deformability'])
         
         # Plot points if we have data
         if areas and deformabilities:
-            plt.scatter(areas, deformabilities, alpha=0.6)
+            # Calculate point density
+            xy = np.vstack([areas, deformabilities])
+            z = gaussian_kde(xy)(xy)
+            
+            # Sort the points by density, so that the densest points are plotted last
+            idx = z.argsort()
+            x, y, z = np.array(areas)[idx], np.array(deformabilities)[idx], z[idx]
+            
+            # Plot points with density-based coloring
+            plt.scatter(x, y, c=z, s=50, edgecolor='face', cmap='viridis')
             
             plt.xlabel('Area')
             plt.ylabel('Deformability')
-            title = f'Area vs Deformability - {pkl_name}'
+            plt.ylim(0, 1)
+            title = f'Area vs Deformability Density - {pkl_name}'
             plt.title(title)
             plt.grid(True, alpha=0.3)
             
@@ -168,75 +186,270 @@ def create_scatter_plots_with_csv(collection: Dict[str, Any]) -> Tuple[Dict[str,
             # Save to dictionary with a proper key
             image_key = f"{pkl_name}"
             scatter_plots[image_key] = image
-            logger.info(f"Created scatter plot for {image_key} with {len(areas)} points")
+            # logger.info(f"Created density plot for {image_key} with {len(areas)} points")
             
-            # Create DataFrame and save to CSV
-            df = pd.DataFrame({'Area': areas, 'Deformability': deformabilities})
+            # Create DataFrame and save to CSV without index
+            df = pd.DataFrame({
+                'Area': areas, 
+                'Deformability': deformabilities
+            }, index=None)
+            
             csv_key = f"{pkl_name}"
             csv_data[csv_key] = df
-            logger.info(f"Created CSV data for {csv_key}")
+            # logger.info(f"Created CSV data for {csv_key}")
         else:
             logger.warning(f"No data points to plot for {pkl_name}")
         
         plt.close(fig)  # Close the figure to free memory
     
-    logger.info(f"Successfully created {len(scatter_plots)} scatter plots and CSV files")
-    return scatter_plots, csv_data
-
-
-# def generate_method_report(overlay_paths: Dict[str, str], 
-#                          scatter_paths: Dict[str, str], 
-#                          params: Dict[str, Any],
-#                          method_name: str) -> str:
-#     """
-#     Generates an HTML report for a single method
-#     """
-#     output_dir = Path(params["reporting_dir"]) / method_name
-#     report_path = output_dir / "report.html"
-    
-#     html_content = [
-#         "<!DOCTYPE html>",
-#         "<html>",
-#         "<head>",
-#         f"<title>{method_name} Analysis Report</title>",
-#         "<style>",
-#         "body { font-family: Arial, sans-serif; margin: 20px; }",
-#         ".image-container { margin: 20px 0; }",
-#         "img { max-width: 100%; }",
-#         "</style>",
-#         "</head>",
-#         "<body>",
-#         f"<h1>{method_name} Analysis Report</h1>",
+    # Create combined scatter plot
+    if all_areas and all_deformabilities:
+        fig_combined = plt.figure(figsize=(12, 10))
+        xy_combined = np.vstack([all_areas, all_deformabilities])
+        z_combined = gaussian_kde(xy_combined)(xy_combined)
         
-#         "<h2>Mask Overlays</h2>"
-#     ]
+        idx_combined = z_combined.argsort()
+        x_combined, y_combined, z_combined = np.array(all_areas)[idx_combined], np.array(all_deformabilities)[idx_combined], z_combined[idx_combined]
+        
+        plt.scatter(x_combined, y_combined, c=z_combined, s=50, edgecolor='face', cmap='viridis')
+        plt.xlabel('Area')
+        plt.ylabel('Deformability')
+        plt.title('Combined Area vs Deformability Density Plot')
+        plt.grid(True, alpha=0.3)
+        
+        buf_combined = BytesIO()
+        plt.savefig(buf_combined, format='png', bbox_inches='tight', dpi=300)
+        buf_combined.seek(0)
+        combined_image = Image.open(buf_combined).copy()
+        buf_combined.close()
+        plt.close(fig_combined)
+        
+        logger.info("Successfully created combined density plot")
+    else:
+        combined_image = None
+        logger.warning("No data points to create combined plot")
     
-#     # Add mask overlays
-#     for name, path in overlay_paths.items():
-#         html_content.extend([
-#             f"<div class='image-container'>",
-#             f"<h3>{name}</h3>",
-#             f"<img src='{os.path.relpath(path, output_dir)}'>",
-#             "</div>"
-#         ])
-    
-#     # Add scatter plots
-#     html_content.append("<h2>Scatter Plots</h2>")
-#     for name, path in scatter_paths.items():
-#         html_content.extend([
-#             f"<div class='image-container'>",
-#             f"<h3>{name}</h3>",
-#             f"<img src='{os.path.relpath(path, output_dir)}'>",
-#             "</div>"
-#         ])
-    
-#     html_content.extend([
-#         "</body>",
-#         "</html>"
-#     ])
-    
-#     # Write HTML file
-#     report_path.write_text("\n".join(html_content))
-    
-#     return str(report_path)
+    return scatter_plots, csv_data, combined_image
 
+def create_combined_scatter_plot(collection: Dict[str, Any]) -> Tuple[Image.Image, pd.DataFrame]:
+    """
+    Creates a single scatter plot combining data from all PKL files with different colors
+    
+    Args:
+        collection: Dictionary containing the results
+        
+    Returns:
+        Tuple containing:
+        - PIL Image of combined scatter plot
+        - Consolidated pandas DataFrame with source information
+    """
+    fig = plt.figure(figsize=(12, 10))
+    all_data = []
+    
+    # Process each PKL file
+    for pkl_name, value in collection.items():
+        logger.info(f"Processing PKL for combined plot: {pkl_name}")
+        
+        # Load data on-demand
+        if callable(value):
+            try:
+                result = value()
+            except Exception as e:
+                logger.error(f"Error loading data for {pkl_name}: {e}")
+                continue
+        else:
+            result = value
+        
+        areas = []
+        deformabilities = []
+        
+        # Collect data points
+        for image_data in result.values():
+            if 'DI' in image_data and image_data['DI']:
+                for contour_info in image_data['DI']:
+                    if isinstance(contour_info, dict) and 'area' in contour_info and 'deformability' in contour_info:
+                        areas.append(contour_info['area'])
+                        deformabilities.append(contour_info['deformability'])
+                        all_data.append({
+                            'Area': contour_info['area'],
+                            'Deformability': contour_info['deformability'],
+                            'Source': pkl_name
+                        })
+        
+        if areas and deformabilities:
+            # Calculate and plot density for this dataset
+            xy = np.vstack([areas, deformabilities])
+            z = gaussian_kde(xy)(xy)
+            
+            # Sort points by density
+            idx = z.argsort()
+            x, y, z = np.array(areas)[idx], np.array(deformabilities)[idx], z[idx]
+            
+            # Plot with unique label for legend
+            scatter = plt.scatter(x, y, c=z, label=pkl_name, alpha=0.6, s=50)
+            
+            logger.info(f"Added {len(areas)} points from {pkl_name} to combined plot")
+    
+    plt.xlabel('Area')
+    plt.ylabel('Deformability')
+    plt.ylim(0, 1)
+    plt.title('Combined Area vs Deformability Density Plot')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    
+    # Convert to PIL Image
+    buf = BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', dpi=300)
+    buf.seek(0)
+    combined_image = Image.open(buf).copy()
+    buf.close()
+    plt.close(fig)
+    
+    # Create consolidated DataFrame
+    combined_df = pd.DataFrame(all_data)
+    
+    logger.info("Successfully created combined density plot")
+    return combined_image, combined_df
+
+from bokeh.plotting import figure
+from bokeh.layouts import column
+from bokeh.models import (
+    ColumnDataSource, 
+    HoverTool, 
+    ColorBar, 
+    LinearColorMapper,
+    BasicTicker
+)
+from bokeh.embed import file_html
+from bokeh.resources import CDN
+import numpy as np
+from scipy.stats import gaussian_kde
+import base64
+
+def create_interactive_scatter_plots(collection: Dict[str, Any]) -> str:
+    """Creates an interactive scatter plot using Bokeh"""
+    # Prepare data
+    data = {
+        'area': [],
+        'deformability': [],
+        'source': [],
+        'image': [],
+    }
+    
+    # Process each PKL file
+    for pkl_name, value in collection.items():
+        logger.info(f"Processing PKL: {pkl_name}")
+        result = value() if callable(value) else value
+        
+        for image_key, image_data in result.items():
+            if 'DI' in image_data and image_data['DI']:
+                # Convert image to base64
+                img_array = image_data['original_image']
+                
+                # Convert tensor if needed
+                if isinstance(img_array, torch.Tensor):
+                    img_array = img_array.numpy()
+                
+                # Remove extra dimensions
+                img_array = np.squeeze(img_array)
+                
+                # Format conversion
+                if img_array.ndim == 2:
+                    img_array = img_array.astype(np.uint8)
+                    img_array = np.stack([img_array] * 3, axis=-1)
+                elif img_array.ndim == 3 and img_array.shape[2] == 1:
+                    img_array = img_array.astype(np.uint8)
+                    img_array = np.repeat(img_array, 3, axis=2)
+                
+                # Ensure uint8 format
+                if img_array.dtype != np.uint8:
+                    img_array = (img_array * 255).astype(np.uint8)
+                
+                # Convert to base64
+                img_pil = Image.fromarray(img_array)
+                buffered = BytesIO()
+                img_pil.save(buffered, format="PNG")
+                img_str = base64.b64encode(buffered.getvalue()).decode()
+                
+                for contour_info in image_data['DI']:
+                    if isinstance(contour_info, dict) and 'area' in contour_info and 'deformability' in contour_info:
+                        data['area'].append(contour_info['area'])
+                        data['deformability'].append(contour_info['deformability'])
+                        data['source'].append(pkl_name)
+                        data['image'].append(img_str)
+
+    # Calculate point density
+    xy = np.vstack([data['area'], data['deformability']])
+    density = gaussian_kde(xy)(xy)
+    data['density'] = density.tolist()
+
+    # Create ColumnDataSource
+    source = ColumnDataSource(data)
+
+    # Create color mapper
+    color_mapper = LinearColorMapper(
+        palette="Viridis256",
+        low=min(density),
+        high=max(density)
+    )
+
+    # Create figure
+    p = figure(
+        width=800, 
+        height=600,
+        title="Interactive Area vs Deformability Plot",
+        tools="pan,box_zoom,reset,save,wheel_zoom",
+        active_scroll="wheel_zoom"
+    )
+
+    # Add scatter points
+    scatter = p.scatter(
+        'area',
+        'deformability',
+        source=source,
+        size=10,
+        fill_color={'field': 'density', 'transform': color_mapper},
+        line_color=None,
+        alpha=0.6
+    )
+
+    # Add color bar
+    color_bar = ColorBar(
+        color_mapper=color_mapper,
+        ticker=BasicTicker(),
+        label_standoff=12,
+        border_line_color=None,
+        location=(0,0),
+        title="Density",
+        orientation='vertical'
+    )
+    p.add_layout(color_bar, 'right')
+
+    # Configure axis labels
+    p.xaxis.axis_label = 'Area'
+    p.yaxis.axis_label = 'Deformability'
+
+    # Add hover tool
+    hover = HoverTool(
+        tooltips="""
+        <div style="background-color: white; opacity: 0.8; padding: 10px;">
+            <div>
+                <span style="font-size: 14px;"><b>Source:</b> @source</span>
+            </div>
+            <div>
+                <span style="font-size: 14px;"><b>Area:</b> @area{0.00}</span>
+            </div>
+            <div>
+                <span style="font-size: 14px;"><b>Deformability:</b> @deformability{0.00}</span>
+            </div>
+            <div>
+                <img src="data:image/png;base64,@image" style="width: 200px;">
+            </div>
+        </div>
+        """
+    )
+    p.add_tools(hover)
+
+    # Generate HTML
+    html = file_html(p, CDN, "Interactive Scatter Plot")
+    return html
