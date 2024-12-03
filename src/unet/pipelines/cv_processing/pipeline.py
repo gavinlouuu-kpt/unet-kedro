@@ -1,18 +1,50 @@
 from kedro.pipeline import Pipeline, node
 from kedro.pipeline.modular_pipeline import pipeline
 from .nodes import (
-    img_process
+    img_process,
+    contour_process_cv,
+    create_cv_data_dict,
+    prepare_cv_dataset,
+    run_processing
 )
 
 def create_pipeline(**kwargs) -> Pipeline:
     # Base pipeline that uses the processor and model
+    # base_pipeline = Pipeline(
+    #     [
+    #         node(
+    #             func=img_process,
+    #             inputs=["raw_data", "cv_processing_config", "roi"],
+    #             outputs="cv_processed_set",
+    #             name="cv_process_set"
+    #         ),
+    #         node(
+    #             func=contour_process_cv,
+    #              inputs=["cv_processed_set"],
+    #              outputs="cv_processed_contours",
+    #              name="contour_process_cv"
+    #         )
+    #     ]
+    # )
     base_pipeline = Pipeline(
         [
             node(
-                func=img_process,
-                inputs=["raw_data", "cv_processing_config", "roi"],
-                outputs="cv_processed_set",
-                name="cv_process_set"
+                func=create_cv_data_dict,
+                inputs=["raw_data", "roi"],
+                outputs="cv_data_dict",
+                name="create_cv_data_dict"
+            ),
+            node(
+                func=prepare_cv_dataset,
+                inputs=["cv_data_dict", "cv_processing_config"],
+                outputs="cv_dataset",
+                name="prepare_cv_dataset"
+            ),
+            node(
+                func=run_processing,
+                inputs=["cv_dataset", "cv_processing_config"],
+                outputs="cv_processed_contours",
+                name="run_cv_processing"
             )
         ]
     )

@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 import cv2
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ def run_inference(dataloader: Any, model):
 
 
 def process_masks(pred_pair):
-    for result in pred_pair:
+    for key, result in pred_pair.items():
         contours_info = []
         for mask in result['masks']:
             # Convert mask to numpy array if it's not already

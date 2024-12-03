@@ -89,4 +89,5 @@ def create_pipeline(**kwargs) -> Pipeline:
     )
 
     # Combine all pipelines
-    return common_nodes + PAA_12_pipeline + PAA_10_pipeline + PAA_8_pipeline
+    # return common_nodes + PAA_12_pipeline + PAA_10_pipeline + PAA_8_pipeline
+    return common_nodes + PAA_12_pipeline 

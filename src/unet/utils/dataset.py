@@ -11,6 +11,7 @@ from transformers import SamProcessor, SamModel
 
 logger = logging.getLogger(__name__)
 
+# sam_inference
 
 class PrepareSAMDataset(Dataset):
     def __init__(self, images_dict, roi, processor):
@@ -61,8 +62,11 @@ class SamInference:
         print("Device: ", next(self.model.parameters()).device)
 
     def perform_inference(self, dataloader):
-        results = []
-        for batch in dataloader:
+        results = {}
+        for i, batch in enumerate(dataloader):
+            # Get the key from the dataloader
+            key = dataloader.dataset.keys[i]  # Using the keys from PrepareSAMDataset
+            
             pixel_values = batch['pixel_values'].to(self.device)
             input_boxes = batch['input_boxes'].to(self.device)
             original_image = batch['original_image']
@@ -83,14 +87,15 @@ class SamInference:
                 batch["reshaped_input_sizes"]
             )
 
-            # Store the original image and mask
-            results.append({
+            # Store the original image and mask with the original key
+            results[key] = {
                 'original_image': original_image,
                 'masks': masks
-            })
+            }
 
         return results
     
+# opencv_benchmark
 
 def filter_empty_frames(
     partition: Dict[str, Callable[[], Any]],
@@ -228,6 +233,7 @@ def _standardize_key(key: str) -> str:
     # Ensure 4-digit padding
     return key.zfill(4)
 
+# opencv_benchmark
 
 class SegmentationDataset(Dataset):
     def __init__(self, images: Dict, labels: List[Dict]):
@@ -310,3 +316,118 @@ class SegmentationDataset(Dataset):
         mask = torch.FloatTensor(mask)
         
         return image, mask
+
+# cv_processing
+
+class PrepareOpenCVDataset(Dataset):
+    def __init__(self, images_dict, roi, config_json):
+        self.images = images_dict
+        # Convert ROI to same format as SAM pipeline
+        self.roi = roi.iloc[0].values.astype(float)  # [x, y, width, height]
+        self.config = config_json
+        # Sort keys similar to SAM dataset
+        self.keys = sorted(self.images.keys(), key=lambda x: int(x.split('_')[-1]) if x.split('_')[-1].isdigit() else float('inf'))
+        
+        # Initialize background image
+        self.background = self._init_background()
+        self.kernel = cv2.getStructuringElement(
+            cv2.MORPH_CROSS, 
+            self._ensure_tuple(config_json["morph_kernel_size"])
+        )
+
+    def _ensure_tuple(self, value):
+        if isinstance(value, int):
+            return (value, value)
+        return tuple(value)
+
+    def _init_background(self):
+        # Find background image
+        bg_keys = [key for key in self.images.keys() if "background_clean" in key.lower()]
+        if not bg_keys:
+            raise ValueError("No background image found in dataset")
+        bg_key = bg_keys[0]
+
+        # Load the background image
+        background = self.images[bg_key]()
+        if not isinstance(background, Image.Image):
+            raise ValueError(f"Background image {bg_key} is not a valid PIL image")
+
+        background = np.array(background)
+        if background.ndim == 0:
+            raise ValueError(f"Background image {bg_key} could not be converted to a valid NumPy array")
+
+        # Crop background to ROI using unpacked values
+        x, y, w, h = self.roi
+        return background[int(y):int(y+h), int(x):int(x+w)]
+
+    def __len__(self):
+        return len(self.keys)
+
+    def __getitem__(self, idx):
+        key = self.keys[idx]
+        if "background_clean" in key.lower():
+            return None
+
+        # Load and process image
+        img = self.images[key]()
+        if not isinstance(img, Image.Image):
+            logger.warning(f"Image {key} is not a valid PIL image")
+            return None
+
+        # Convert to numpy and crop to ROI using unpacked values
+        x, y, w, h = self.roi
+        image = np.array(img)
+        image = image[int(y):int(y+h), int(x):int(x+w)]
+        original_image = image.copy()
+
+        # Apply processing steps
+        blurred_bg = cv2.GaussianBlur(
+            self.background, 
+            self._ensure_tuple(self.config["gaussian_blur_size"]), 
+            0
+        )
+        blurred_targ = cv2.GaussianBlur(
+            image, 
+            self._ensure_tuple(self.config["gaussian_blur_size"]), 
+            0
+        )
+        bg_sub = cv2.subtract(blurred_bg, blurred_targ)
+        _, binary = cv2.threshold(
+            bg_sub, 
+            self.config["bg_subtract_threshold"], 
+            255, 
+            cv2.THRESH_BINARY
+        )
+        
+        # Morphological operations
+        dilate1 = cv2.dilate(binary, self.kernel, iterations=1)
+        erode1 = cv2.erode(dilate1, self.kernel, iterations=1)
+        erode2 = cv2.erode(erode1, self.kernel, iterations=1)
+        processed = cv2.dilate(erode2, self.kernel, iterations=1)
+        
+        processed = processed.astype(np.uint8)
+        
+        # Return in format similar to SAM output
+        return {
+            'original_image': original_image,
+            'masks': [processed]  # Wrap in list to match SAM format
+        }
+
+class OpenCVInference:
+    def __init__(self, config_json):
+        self.config = config_json
+
+    def perform_processing(self, dataset):
+        results = {}
+        for i in range(len(dataset)):
+            batch = dataset[i]
+            if batch is None:
+                continue
+                
+            key = dataset.keys[i]
+            results[key] = {
+                'original_image': batch['original_image'],
+                'masks': batch['masks']
+            }
+        return results
+            
