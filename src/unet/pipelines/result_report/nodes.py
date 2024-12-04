@@ -325,6 +325,7 @@ from bokeh.resources import CDN
 import numpy as np
 from scipy.stats import gaussian_kde
 import base64
+import cv2
 
 def create_interactive_scatter_plots(collection: Dict[str, Any]) -> str:
     """Creates an interactive scatter plot using Bokeh"""
@@ -344,26 +345,20 @@ def create_interactive_scatter_plots(collection: Dict[str, Any]) -> str:
         for image_key, image_data in result.items():
             if 'DI' in image_data and image_data['DI']:
                 # Convert image to base64
-                img_array = image_data['original_image']
+                img_array = image_data['cropped_image']
+                mask = image_data['masks'][0] if image_data.get('masks') else None
                 
-                # Convert tensor if needed
-                if isinstance(img_array, torch.Tensor):
-                    img_array = img_array.numpy()
+                # Convert grayscale to RGB
+                if len(img_array.shape) == 2:
+                    img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
                 
-                # Remove extra dimensions
-                img_array = np.squeeze(img_array)
-                
-                # Format conversion
-                if img_array.ndim == 2:
-                    img_array = img_array.astype(np.uint8)
-                    img_array = np.stack([img_array] * 3, axis=-1)
-                elif img_array.ndim == 3 and img_array.shape[2] == 1:
-                    img_array = img_array.astype(np.uint8)
-                    img_array = np.repeat(img_array, 3, axis=2)
-                
-                # Ensure uint8 format
-                if img_array.dtype != np.uint8:
-                    img_array = (img_array * 255).astype(np.uint8)
+                # Create mask overlay
+                if mask is not None:
+                    # Create red overlay with same shape as RGB image
+                    overlay = np.zeros_like(img_array)
+                    overlay[mask > 0] = [255, 0, 0]  # Red color
+                    # Blend original and overlay
+                    img_array = cv2.addWeighted(img_array, 0.8, overlay, 0.2, 0)
                 
                 # Convert to base64
                 img_pil = Image.fromarray(img_array)
@@ -395,8 +390,9 @@ def create_interactive_scatter_plots(collection: Dict[str, Any]) -> str:
 
     # Create figure
     p = figure(
-        width=800, 
-        height=600,
+        # width=800, 
+        # height=600,
+        sizing_mode="stretch_both",
         title="Interactive Area vs Deformability Plot",
         tools="pan,box_zoom,reset,save,wheel_zoom",
         active_scroll="wheel_zoom"
@@ -432,7 +428,7 @@ def create_interactive_scatter_plots(collection: Dict[str, Any]) -> str:
     # Add hover tool
     hover = HoverTool(
         tooltips="""
-        <div style="background-color: white; opacity: 0.8; padding: 10px;">
+        <div style="background-color: white; opacity: 1; padding: 10px;">
             <div>
                 <span style="font-size: 14px;"><b>Source:</b> @source</span>
             </div>
