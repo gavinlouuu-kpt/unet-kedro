@@ -88,6 +88,18 @@ def create_pipeline(**kwargs) -> Pipeline:
         outputs={"processed_predictions": "PAA_8.processed_predictions"}
     )
 
+    test_pipeline = pipeline(
+        pipe=base_pipeline,
+        namespace="test",
+        inputs={
+            "raw_data": "test.raw_data",
+            "roi": "test.roi",
+            "processor": "processor",
+            "model": "model"
+        },
+        outputs={"processed_predictions": "test.processed_predictions"}
+    )
+
     # Combine all pipelines
-    return common_nodes + PAA_12_pipeline + PAA_10_pipeline + PAA_8_pipeline
-    # return common_nodes + PAA_12_pipeline 
+    # return common_nodes + PAA_12_pipeline + PAA_10_pipeline + PAA_8_pipeline
+    return common_nodes + test_pipeline

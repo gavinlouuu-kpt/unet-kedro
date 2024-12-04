@@ -53,13 +53,6 @@ def process_masks(pred_pair):
     for key, result in pred_pair.items():
         contours_info = []
         for mask in result['masks']:
-            # Convert mask to numpy array if it's not already
-            mask = mask.cpu().numpy()
-            
-            if mask.ndim == 4:
-                mask = mask.squeeze(0).squeeze(0)
-            
-            mask = mask.astype(np.uint8)
             # Find contours
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             # Check if there is more than one contour

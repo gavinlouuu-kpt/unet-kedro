@@ -49,13 +49,17 @@ class PrepareSAMDataset(Dataset):
     def __getitem__(self, idx):
         key = self.keys[idx]
         image = self.images[key]()
+        # Convert ROI from x, y, width, height to x_min, y_min, x_max, y_max
+        x, y, width, height = map(int, self.roi)
+        # cropped_image = original_image[y:y+height, x:x+width]
+        box_prompt = [x, y, x + width, y + height]
         # Store original image before processing
         image = np.array(image)
-        image = np.stack([image] * 3, axis=-1) if image.ndim == 2 else image
         original_image = image.copy()
-        # Convert ROI from x, y, width, height to x_min, y_min, x_max, y_max
-        x, y, width, height = self.roi
-        box_prompt = [x, y, x + width, y + height]
+        cropped_image = original_image[y:y+height, x:x+width]
+        logger.info(f"cropped_image shape: {cropped_image.shape}")
+        image = np.stack([image] * 3, axis=-1) if image.ndim == 2 else image
+        
 
         # Process the image
         inputs = self.processor(
@@ -68,7 +72,8 @@ class PrepareSAMDataset(Dataset):
         inputs = {k: v.squeeze(0) for k, v in inputs.items()}
         
         # Add original image to inputs
-        inputs["original_image"] = original_image
+        inputs["cropped_image"] = cropped_image
+        inputs["roi"] = self.roi
 
         return inputs
 
@@ -91,7 +96,7 @@ class SamInference:
             
             pixel_values = batch['pixel_values'].to(self.device)
             input_boxes = batch['input_boxes'].to(self.device)
-            original_image = batch['original_image']
+            # original_image = batch['original_image']
 
             # Perform inference
             with torch.no_grad():
@@ -108,10 +113,19 @@ class SamInference:
                 batch["original_sizes"],
                 batch["reshaped_input_sizes"]
             )
-
+            # Convert ROI tensor to integers
+            roi = batch['roi'].squeeze().cpu().tolist()  # Convert tensor to list
+            # crop masks to roi
+            x, y, width, height = map(int, roi)
+            # convert masks to numpy
+            masks = [mask.cpu().numpy() for mask in masks]
+            # squeeze masks
+            masks = [np.squeeze(mask).astype(np.uint8) for mask in masks]
+            masks = [mask[y:y+height, x:x+width] for mask in masks]
+            
             # Store the original image and mask with the original key
             results[key] = {
-                'original_image': original_image,
+                'cropped_image': np.array(batch['cropped_image']).squeeze(),
                 'masks': masks
             }
 
@@ -400,7 +414,6 @@ class PrepareOpenCVDataset(Dataset):
         x, y, w, h = self.roi
         image = np.array(img)
         image = image[int(y):int(y+h), int(x):int(x+w)]
-        original_image = image.copy()
 
         # Apply processing steps
         blurred_bg = cv2.GaussianBlur(
@@ -431,8 +444,8 @@ class PrepareOpenCVDataset(Dataset):
         
         # Return in format similar to SAM output
         return {
-            'original_image': original_image,
-            'masks': [processed]  # Wrap in list to match SAM format
+            'cropped_image': image,
+            'masks': [processed],  # Wrap in list to match SAM format
         }
 
 class OpenCVInference:
@@ -448,8 +461,8 @@ class OpenCVInference:
                 
             key = dataset.keys[i]
             results[key] = {
-                'original_image': batch['original_image'],
-                'masks': batch['masks']
+                'cropped_image': batch['cropped_image'],
+                'masks': batch['masks'],
             }
         return results
             
