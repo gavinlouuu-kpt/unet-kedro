@@ -57,7 +57,6 @@ class PrepareSAMDataset(Dataset):
         image = np.array(image)
         original_image = image.copy()
         cropped_image = original_image[y:y+height, x:x+width]
-        logger.info(f"cropped_image shape: {cropped_image.shape}")
         image = np.stack([image] * 3, axis=-1) if image.ndim == 2 else image
         
 

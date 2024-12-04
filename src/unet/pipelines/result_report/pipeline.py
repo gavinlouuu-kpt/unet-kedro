@@ -45,6 +45,6 @@ def create_pipeline(**kwargs) -> Pipeline:
 
 
     # Combine all pipelines
-    # return SAM_pipeline + CV_pipeline
+    return SAM_pipeline + CV_pipeline
     # Combine all pipelines
-    return CV_pipeline
+    # return CV_pipeline
