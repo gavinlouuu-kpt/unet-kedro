@@ -1,0 +1,11 @@
+egrabber_paa6:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: ../../data/01_raw/egrabber_paa6/
+  filename_suffix: ".tiff"
+
+sam2_test:
+  type: partitions.PartitionedDataset
+  dataset: pillow.ImageDataset
+  path: ../../data/01_raw/sam2_test/
+  filename_suffix: ".tiff"

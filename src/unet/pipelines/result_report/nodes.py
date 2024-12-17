@@ -156,9 +156,8 @@ def create_scatter_plots_with_csv(collection: Dict[str, Any]) -> Tuple[Dict[str,
                         all_areas.append(contour_info['area'])
                         all_deformabilities.append(contour_info['deformability'])
         
-        # Plot points if we have data
+        # Calculate point density for each PKL file individually
         if areas and deformabilities:
-            # Calculate point density
             xy = np.vstack([areas, deformabilities])
             z = gaussian_kde(xy)(xy)
             
@@ -277,7 +276,7 @@ def create_combined_scatter_plot(collection: Dict[str, Any]) -> Tuple[Image.Imag
                         })
         
         if areas and deformabilities:
-            # Calculate and plot density for this dataset
+            # Calculate and plot density for each PKL file individually
             xy = np.vstack([areas, deformabilities])
             z = gaussian_kde(xy)(xy)
             

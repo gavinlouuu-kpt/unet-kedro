@@ -8,8 +8,66 @@ from .parse_label_json import LabelParser
 import cv2
 import pandas as pd
 from transformers import SamProcessor, SamModel
+from torch.utils.data import ConcatDataset
+from torch.utils.data import DataLoader
 
 logger = logging.getLogger(__name__)
+
+
+def contour_process_cv(processed_images, num_masks = 1):
+    """
+    Processes a dictionary containing image masks and generates statistics.
+    
+    Parameters:
+    processed_images (dict): Dictionary containing image data with masks.
+    
+    Returns:
+    dict: Dictionary with added statistics for each mask.
+    """
+    for key, result in processed_images.items():
+        contours_info = []
+        for mask in result['masks']:
+            if hasattr(mask, 'numpy'):
+                # Convert mask to numpy array if it's not already
+                mask = mask.numpy()
+            
+            if mask.ndim == 4:
+                mask = mask.squeeze(0).squeeze(0)
+            
+            mask = mask.astype(np.uint8)
+            # Find contours
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # Check if there is more than one contour
+            if len(contours) > num_masks:
+                result['DI'] = None
+                break
+
+            for contour in contours:
+                convex_hull = cv2.convexHull(contour)
+                # Calculate convex hull area
+                convex_hull_area = cv2.contourArea(convex_hull)
+                # Calculate area
+                area = cv2.contourArea(contour)
+                # Calculate area ratio between convex hull and contour
+                area_ratio = convex_hull_area / area if area != 0 else 0
+                
+                # Calculate perimeter
+                perimeter = cv2.arcLength(convex_hull, True)
+                
+                # Calculate deformability (perimeter to area ratio) 1-C (2*sqrt(*pi*a))/l
+                deformability = 1 - (2*np.sqrt(np.pi*convex_hull_area))/perimeter if convex_hull_area != 0 else 0
+                
+
+                contours_info.append({
+                    'contour': contour,
+                    'area': convex_hull_area,
+                    'deformability': deformability,
+                    'area_ratio': area_ratio
+                })
+        
+        result['DI'] = contours_info
+
+    return processed_images
 
 
 def load_partition_dict(partition_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -130,7 +188,264 @@ class SamInference:
 
         return results
     
+class TuneSAMDataset(Dataset):
+    def __init__(self, data_dict, processor, prefix=''):
+        self.images = data_dict['images']
+        self.masks = data_dict['masks']
+        self.box_prompt = data_dict['box_prompt']
+        self.processor = processor
+        self.prefix = prefix
+        
+        # Standardize and sort keys
+        def extract_number(key: str) -> int:
+            # Extract numeric part from the key
+            nums = ''.join(filter(str.isdigit, key))
+            return int(nums) if nums else float('inf')
+        
+        # Convert keys to list and sort them based on numeric value
+        self.keys = list(self.images.keys())
+        try:
+            self.keys.sort(key=extract_number)
+        except Exception as e:
+            logger.error(f"Error sorting keys: {e}")
+            logger.error(f"Keys sample: {self.keys[:5]}")
+            raise
+            
+        logger.info(f"Dataset initialized with {len(self.keys)} images")
+        logger.info(f"Sample keys: {self.keys[:5]}")
+
+    def __len__(self):
+        return len(self.keys)
+
+    def __getitem__(self, idx):
+        if not isinstance(idx, int):
+            raise TypeError(f"Index must be an integer, got {type(idx)}")
+            
+        if idx >= len(self.keys):
+            raise IndexError(f"Index {idx} out of range for dataset with {len(self.keys)} items")
+            
+        key = self.keys[idx]
+        logger.debug(f"Accessing item with idx {idx}, key {key}")
+        
+        image = self.images[key]
+        ground_truth_mask = self.masks[key]
+
+        # Store original image before processing
+        original_image = image.copy()
+        original_ground_truth_mask = ground_truth_mask.copy()
+
+        # Process both image and mask together
+        inputs = self.processor(
+            images=image,
+            segmentation_maps=ground_truth_mask,
+            input_boxes=[[self.box_prompt.tolist()]],
+            return_tensors="pt"
+        )
+        
+        # Remove batch dimension
+        inputs = {k:v.squeeze(0) for k,v in inputs.items()}
+        
+        # Add metadata to track source
+        inputs["dataset_key"] = f"{self.prefix}{key}"
+        inputs["ground_truth_mask"] = inputs.pop('labels')
+        inputs["original_image"] = original_image
+        inputs["original_ground_truth_mask"] = original_ground_truth_mask
+        
+        return inputs
+
 # opencv_benchmark
+
+def select_background(
+    partition: Dict[str, Callable[[], Any]],
+    roi: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Select the background image from the partition. 
+    Use left and right arrow keys to navigate through the images.
+    Press enter to confirm selection.
+    
+    Args:
+        partition: Kedro partition containing images as load functions
+        roi: DataFrame containing ROI coordinates
+        
+    Returns:
+        DataFrame containing background image key
+    """
+    # Convert partition keys to sorted list for navigation
+    keys = sorted(partition.keys())
+    current_idx = 0
+    
+    # Extract ROI coordinates
+    x, y, w, h = roi.iloc[0].values.astype(int)
+    
+    while True:
+        # Load and display current image
+        current_key = keys[current_idx]
+        current_image = partition[current_key]()
+        current_image = np.array(current_image)
+        
+        # Crop to ROI
+        cropped_image = current_image[y:y+h, x:x+w]
+        
+        # Create window with instructions
+        cv2.namedWindow('Background Image Selection', cv2.WINDOW_NORMAL)
+        info_image = np.zeros((100, cropped_image.shape[1]), dtype=np.uint8)
+        cv2.putText(info_image, f"Image: {current_key}", (10, 30), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(info_image, "Left/Right: Navigate, Enter: Select", (10, 70),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        
+        # Combine info and image
+        display_image = np.vstack([info_image, cropped_image])
+        cv2.imshow('Background Image Selection', display_image)
+        
+        # Handle keyboard input
+        key = cv2.waitKey(0) & 0xFF
+        
+        if key == ord('\r') or key == ord('\n'):  # Enter key
+            selected_key = current_key
+            break
+        elif key == 81 or key == ord('a'):  # Left arrow or 'a'
+            current_idx = (current_idx - 1) % len(keys)
+        elif key == 83 or key == ord('d'):  # Right arrow or 'd'
+            current_idx = (current_idx + 1) % len(keys)
+        elif key == 27:  # ESC
+            selected_key = keys[0]  # Default to first image
+            break
+    
+    cv2.destroyAllWindows()
+    
+    # Return selected key in DataFrame
+    return pd.DataFrame({'background_key': [selected_key]})
+
+def select_roi(
+    partition: Dict[str, Callable[[], Any]]
+) -> pd.DataFrame:
+    """
+    Interactive ROI selection process using OpenCV.
+    
+    Args:
+        partition: Kedro partition containing images as load functions
+        
+    Returns:
+        DataFrame containing ROI coordinates (x, y, width, height)
+    """
+    # Get the first image for ROI selection
+    first_key = next(iter(partition.keys()))
+    first_image = partition[first_key]()
+    image = np.array(first_image)
+    
+    # Create window and instructions
+    window_name = 'ROI Selection'
+    cv2.namedWindow(window_name)
+    print("Instructions:")
+    print("1. Draw a rectangle by clicking and dragging")
+    print("2. Press SPACE or ENTER to confirm selection")
+    print("3. Press 'c' to cancel and retry")
+    
+    # Get ROI using selectROI
+    x, y, w, h = cv2.selectROI(window_name, image, fromCenter=False, showCrosshair=True)
+    cv2.destroyAllWindows()
+    
+    # Create DataFrame with ROI coordinates
+    roi_df = pd.DataFrame({
+        'x': [x],
+        'y': [y],
+        'width': [w],
+        'height': [h]
+    })
+    
+    logger.info(f"Selected ROI: x={x}, y={y}, width={w}, height={h}")
+    return roi_df
+
+
+def filter_empty_frames_ext_bg(
+    partition: Dict[str, Callable[[], Any]],
+    parameters: Dict[str, Any],
+    roi: pd.DataFrame,
+    background: pd.DataFrame
+) -> Dict[str, Image.Image]:
+    """
+    Filter out frames that are empty within the ROI using the same processing pipeline as the main processing.
+    
+    Args:
+        partition: Dictionary of image load functions
+        parameters: Processing parameters
+        roi: DataFrame containing ROI coordinates (x, y, width, height)
+        background: DataFrame containing selected background image key
+        
+    Returns:
+        Dictionary of filtered PIL Images (including background)
+    """
+    logger.info("Filtering empty frames")
+    logger.info(f"Initial frame count: {len(partition)}")
+    
+    # Extract ROI coordinates
+    x = roi['x'].iloc[0]
+    y = roi['y'].iloc[0]
+    w = roi['width'].iloc[0]
+    h = roi['height'].iloc[0]
+    
+    # Setup
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, parameters["kernel_size"])
+    filtered_images = {}
+    all_areas = []
+    
+    # Get background image using the selected key from background DataFrame
+    bg_key = background['background_key'].iloc[0]
+    background_pil = partition[bg_key]()
+    background = np.array(background_pil)
+    background = background[y:y+h, x:x+w]
+    filtered_images[bg_key] = background_pil
+    
+    # Process each image
+    for key, load_func in partition.items():
+        if key == bg_key:  # Skip the background image
+            continue
+            
+        # Load and process image
+        image_pil = load_func()
+        image = np.array(image_pil)
+        image = image[y:y+h, x:x+w]
+        
+        # Apply processing
+        blurred_bg = cv2.GaussianBlur(background, parameters["blur_size"], 0)
+        blurred = cv2.GaussianBlur(image, parameters["blur_size"], 0)
+        bg_sub = cv2.subtract(blurred_bg, blurred)
+        _, binary = cv2.threshold(bg_sub, parameters["threshold"], 255, cv2.THRESH_BINARY)
+        
+        # Morphological operations
+        dilate1 = cv2.dilate(binary, kernel, iterations=1)
+        erode1 = cv2.erode(dilate1, kernel, iterations=1)
+        erode2 = cv2.erode(erode1, kernel, iterations=1)
+        processed = cv2.dilate(erode2, kernel, iterations=1)
+        
+        # Calculate area
+        white_area = np.sum(processed > 0)
+        all_areas.append(white_area)
+        
+        logger.debug(f"Frame {key}: white area in ROI = {white_area}")
+        
+        # Keep frame if it has sufficient white pixels in ROI
+        if white_area > parameters["minimum_area"]:
+            filtered_images[key] = image_pil
+            logger.debug(f"Keeping frame {key}")
+        else:
+            logger.debug(f"Filtering out frame {key}")
+    
+    # Log statistics
+    if all_areas:
+        logger.info(f"Area statistics within ROI:")
+        logger.info(f"Min area: {min(all_areas)}")
+        logger.info(f"Max area: {max(all_areas)}")
+        logger.info(f"Mean area: {np.mean(all_areas):.2f}")
+        logger.info(f"Median area: {np.median(all_areas):.2f}")
+    
+    logger.info(f"Filtered {len(partition) - len(filtered_images)} empty frames")
+    logger.info(f"Remaining frames: {len(filtered_images)}")
+    
+    return filtered_images
+
 
 def filter_empty_frames(
     partition: Dict[str, Callable[[], Any]],

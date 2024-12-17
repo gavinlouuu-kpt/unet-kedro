@@ -73,12 +73,12 @@ model:
 "{namespace}.raw_data":
   type: partitions.PartitionedDataset
   dataset: pillow.ImageDataset
-  path: data/05_model_input/{namespace}/
+  path: data/05_model_input/inference/{namespace}/
   filename_suffix: ".png"
 
 "{namespace}.roi":
   type: pandas.CSVDataset
-  filepath: data/05_model_input/{namespace}/batch_1/roi.csv
+  filepath: data/05_model_input/inference/{namespace}/batch_1/roi.csv
 
 "{namespace}.processed_predictions":
   type: pickle.PickleDataset
@@ -127,6 +127,49 @@ model:
 
 "{namespace}interactive_scatter_plots":
   type: text.TextDataset
-  filepath: data/08_reporting/interactive_scatter_plots/{namespace}/{namespace}_interactive_scatter_plots.html
+  filepath: data/08_reporting/scatter_plots/{namespace}/{namespace}_interactive_scatter_plots.html
+
+# ---------------------------------------------------------------------
+# Sam fine-tuning
+
+"{namespace}.sam_fine_tuning_image":
+  type: partitions.PartitionedDataset
+  path: data/05_model_input/sam_fine_tuning/{namespace}/
+  filename_suffix: ".png"
+  dataset: pillow.ImageDataset
+
+"{namespace}.sam_fine_tuning_mask":
+  type: json.JSONDataset
+  filepath: data/05_model_input/sam_fine_tuning/{namespace}/{namespace}_mask.json
+
+"{namespace}.tuning_roi":
+  type: pandas.CSVDataset
+  filepath: data/05_model_input/sam_fine_tuning/{namespace}/roi.csv
+
+"{namespace}.part_datasets":
+  type: pickle.PickleDataset
+  filepath: data/05_model_input/sam_fine_tuning/prepared_training_data/{namespace}_training_data.pkl
+
+datasets_collection:
+  type: partitions.PartitionedDataset
+  path: data/05_model_input/sam_fine_tuning/prepared_training_data/
+  filename_suffix: ".pkl"
+  dataset: pickle.PickleDataset
+
+fine_tuned_model:
+  type: pickle.PickleDataset
+  filepath: data/06_models/sam_bead
+
+training_loss_plot:
+  type: pillow.ImageDataset
+  filepath: data/08_reporting/sam_training/loss_plot.png
 
 
+# ---------------------------------------------------------------------
+# Sam continuous
+
+"{namespace}.continuous_partition":
+  type: partitions.PartitionedDataset
+  path: data/01_raw/continuous/{namespace}/
+  filename_suffix: ".tiff"
+  dataset: pillow.ImageDataset

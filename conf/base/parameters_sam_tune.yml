@@ -1,0 +1,16 @@
+# This is a boilerplate parameters config generated for pipeline 'sam_tune'
+# using Kedro 0.19.9.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.9/configuration/parameters.html
+
+# Hyperparameters
+sam_fine_tune:
+  num_epochs: 20
+  learning_rate: 1e-5
+  weight_decay: 0
+  val_split: 0.2
+  random_seed: 42
+  batch_size: 4
+  processor_type: "facebook/sam-vit-base"
+  

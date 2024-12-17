@@ -1,12 +1,11 @@
 from kedro.pipeline import Pipeline, node
 from kedro.pipeline.modular_pipeline import pipeline
+from unet.utils.dataset import contour_process_cv
 from .nodes import (
     img_process,
-    contour_process_cv,
     create_cv_data_dict,
     prepare_cv_dataset,
     run_processing,
-    contour_process_cv
 )
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -51,7 +50,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=contour_process_cv,
                 inputs="cv_processed",
                 outputs="cv_processed_contours",
-                name="processing_contours"
+                name="cv_contour_process"
             )
         ]
     )

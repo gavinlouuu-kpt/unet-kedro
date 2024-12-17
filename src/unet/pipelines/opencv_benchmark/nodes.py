@@ -10,49 +10,8 @@ import logging
 import time
 import pandas as pd
 from unet.utils.parse_label_json import LabelParser
-from unet.utils.dataset import _standardize_key, _validate_image_shapes, filter_empty_frames
+from unet.utils.dataset import _standardize_key, _validate_image_shapes, filter_empty_frames, select_roi
 logger = logging.getLogger(__name__)
-
-
-def select_roi(
-    partition: Dict[str, Callable[[], Any]]
-) -> pd.DataFrame:
-    """
-    Interactive ROI selection process using OpenCV.
-    
-    Args:
-        partition: Kedro partition containing images as load functions
-        
-    Returns:
-        DataFrame containing ROI coordinates (x, y, width, height)
-    """
-    # Get the first image for ROI selection
-    first_key = next(iter(partition.keys()))
-    first_image = partition[first_key]()
-    image = np.array(first_image)
-    
-    # Create window and instructions
-    window_name = 'ROI Selection'
-    cv2.namedWindow(window_name)
-    print("Instructions:")
-    print("1. Draw a rectangle by clicking and dragging")
-    print("2. Press SPACE or ENTER to confirm selection")
-    print("3. Press 'c' to cancel and retry")
-    
-    # Get ROI using selectROI
-    x, y, w, h = cv2.selectROI(window_name, image, fromCenter=False, showCrosshair=True)
-    cv2.destroyAllWindows()
-    
-    # Create DataFrame with ROI coordinates
-    roi_df = pd.DataFrame({
-        'x': [x],
-        'y': [y],
-        'width': [w],
-        'height': [h]
-    })
-    
-    logger.info(f"Selected ROI: x={x}, y={y}, width={w}, height={h}")
-    return roi_df
 
 
 

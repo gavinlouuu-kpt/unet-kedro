@@ -1,0 +1,11 @@
+# This is a boilerplate parameters config generated for pipeline 'sam_continuous'
+# using Kedro 0.19.9.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.9/configuration/parameters.html
+
+cv_basic_options:
+  minimum_area: 10
+  kernel_size: [3, 3]
+  blur_size: [3, 3]
+  threshold: 10
