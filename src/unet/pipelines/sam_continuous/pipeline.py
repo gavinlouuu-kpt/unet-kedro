@@ -6,16 +6,19 @@ generated using Kedro 0.19.9
 from kedro.pipeline import Pipeline, node, pipeline
 from kedro.pipeline.modular_pipeline import pipeline
 from unet.utils.dataset import filter_empty_frames_ext_bg, select_roi, select_background
-from unet.pipelines.sam_inference.pipeline import sam_inference_pipeline
+from unet.pipelines.sam_inference.pipeline import get_sam_inference_pipeline
+from unet.pipelines.sam_inference.nodes import initSAM
 
 def create_pipeline(**kwargs) -> Pipeline:
-
-    sam_inference_base = sam_inference_pipeline()
-    
-    sam_inference_pipeline = pipeline(
-        pipe=sam_inference_base,
-        namespace="paa6",
-        parameters={"params:sam_bead_inference": "params:sam_bead_inference"},
+    init_sam_nodes = Pipeline(
+        [
+            node(
+                func=initSAM,
+                inputs=["params:sam_bead_inference"],
+                outputs=["processor", "model"],
+                name="initSAM"
+            ),
+        ]
     )
 
     background_init_pipeline = pipeline(
@@ -35,17 +38,25 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=filter_empty_frames_ext_bg,
                 inputs=["continuous_partition", "params:cv_basic_options", "roi", "background"],
-                outputs="filtered_images",
-                name="filter_empty_frames",
+                outputs="raw_data",
+                name="filter_empty_frames_ext_bg",
             ),
         ]
     )
-    paa6_pipeline = pipeline(
-        pipe=background_init_pipeline,
+
+    # Create the complete pipeline with namespace
+    complete_pipeline = pipeline(
+        pipe=background_init_pipeline + get_sam_inference_pipeline(),
         namespace="paa6",
-        # inputs={"": ""},
+        inputs={
+            # "continuous_partition": "paa6.continuous_partition",
+            "processor": "processor",
+            "model": "model",
+        },
         parameters={"params:cv_basic_options": "params:cv_basic_options"},
+        # outputs={"processed_predictions": "paa6.processed_predictions"}
     )
-    return paa6_pipeline
+    
+    return init_sam_nodes + complete_pipeline
 
 

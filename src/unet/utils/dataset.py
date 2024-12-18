@@ -263,14 +263,12 @@ def select_background(
     Select the background image from the partition. 
     Use left and right arrow keys to navigate through the images.
     Press enter to confirm selection.
-    
-    Args:
-        partition: Kedro partition containing images as load functions
-        roi: DataFrame containing ROI coordinates
-        
-    Returns:
-        DataFrame containing background image key
     """
+    # Add debugging information about partition keys
+    logger.info("Partition keys format examples:")
+    for key in list(partition.keys())[:5]:
+        logger.info(f"Key: {key}, Type: {type(key)}")
+    
     # Convert partition keys to sorted list for navigation
     keys = sorted(partition.keys())
     current_idx = 0
@@ -315,8 +313,9 @@ def select_background(
     
     cv2.destroyAllWindows()
     
-    # Return selected key in DataFrame
-    return pd.DataFrame({'background_key': [selected_key]})
+    # Add debugging before returning
+    logger.info(f"Selected background key: {selected_key}, Type: {type(selected_key)}")
+    return pd.DataFrame({'background_key': [str(selected_key)]}, dtype=str)
 
 def select_roi(
     partition: Dict[str, Callable[[], Any]]
@@ -366,19 +365,12 @@ def filter_empty_frames_ext_bg(
     background: pd.DataFrame
 ) -> Dict[str, Image.Image]:
     """
-    Filter out frames that are empty within the ROI using the same processing pipeline as the main processing.
-    
-    Args:
-        partition: Dictionary of image load functions
-        parameters: Processing parameters
-        roi: DataFrame containing ROI coordinates (x, y, width, height)
-        background: DataFrame containing selected background image key
-        
-    Returns:
-        Dictionary of filtered PIL Images (including background)
+    Filter out frames that are empty within the ROI.
     """
-    logger.info("Filtering empty frames")
-    logger.info(f"Initial frame count: {len(partition)}")
+    logger.info("Starting filter_empty_frames_ext_bg")
+    logger.info("Partition keys format examples:")
+    for key in list(partition.keys())[:5]:
+        logger.info(f"Key: {key}, Type: {type(key)}")
     
     # Extract ROI coordinates
     x = roi['x'].iloc[0]
@@ -391,8 +383,21 @@ def filter_empty_frames_ext_bg(
     filtered_images = {}
     all_areas = []
     
-    # Get background image using the selected key from background DataFrame
+    # Get background key and convert to string with proper format
     bg_key = background['background_key'].iloc[0]
+    if isinstance(bg_key, (np.floating, float)):
+        bg_key = f"{bg_key:.4f}"  # Format to match the string format in partition
+    
+    logger.info(f"Background key from DataFrame: {bg_key}, Type: {type(bg_key)}")
+    
+    # Try to find the key in partition
+    if bg_key not in partition:
+        logger.error(f"Background key '{bg_key}' not found in partition")
+        logger.error("Available keys (first 5):")
+        for key in list(partition.keys())[:5]:
+            logger.error(f"  {key} ({type(key)})")
+        raise KeyError(f"Background key '{bg_key}' not found in partition")
+    
     background_pil = partition[bg_key]()
     background = np.array(background_pil)
     background = background[y:y+h, x:x+w]

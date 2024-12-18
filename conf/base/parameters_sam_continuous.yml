@@ -9,3 +9,7 @@ cv_basic_options:
   kernel_size: [3, 3]
   blur_size: [3, 3]
   threshold: 10
+
+# sam_bead_inference:
+#   processor: "data/06_models/sam_bead_processor"
+#   model: "data/06_models/sam_bead"

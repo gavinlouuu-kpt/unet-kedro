@@ -8,7 +8,7 @@ from .nodes import (
     prepare_dataloader,
 )
 
-def sam_inference_pipeline() -> Pipeline:
+def get_sam_inference_pipeline() -> Pipeline:
     """Returns the base pipeline for SAM inference."""
     return Pipeline(
         [
@@ -53,7 +53,7 @@ def create_pipeline(**kwargs) -> Pipeline:
     )
 
     # Base pipeline that uses the processor and model
-    base_pipeline = sam_inference_pipeline()
+    base_pipeline = get_sam_inference_pipeline()
     # Create pipelines for each namespace
     PAA_12_pipeline = pipeline(
         pipe=base_pipeline,

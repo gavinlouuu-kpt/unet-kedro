@@ -173,3 +173,15 @@ training_loss_plot:
   path: data/01_raw/continuous/{namespace}/
   filename_suffix: ".tiff"
   dataset: pillow.ImageDataset
+
+# "{namespace}.filtered_images":
+#   type: pickle.PickleDataset
+#   filepath: data/02_intermediate/{namespace}/filtered_images.pkl
+
+# "{namespace}.roi":
+#   type: pandas.CSVDataset
+#   filepath: data/02_intermediate/{namespace}/roi.csv
+
+"{namespace}.background":
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/{namespace}/background.csv
