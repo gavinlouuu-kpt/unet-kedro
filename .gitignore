@@ -21,7 +21,7 @@ notebooks/reporting/**
 # keep also the example dataset
 !data/01_raw/*
 
-
+*.pkl
 ##########################
 # Common files
 
