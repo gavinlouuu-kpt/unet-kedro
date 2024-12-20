@@ -10,20 +10,23 @@ class LabelParser:
     @staticmethod
     def _get_image_number(filename: str) -> str:
         """
-        Extract number between underscore and dot in filename.
+        Issue: when mixing dataset there could be repeated image name.
+        Extract number between underscore/dot and extension dot in filename.
         Example:
         - e054e7f2-image_6.png -> 6
         - image_123.jpg -> 123
         - test_45.jpeg -> 45
+        - image.456.png -> 456
+        - sample.789.jpg -> 789
         """
-        match = re.search(r'_(\d+)\.', filename)
+        match = re.search(r'[_.](\d+)\.', filename)
         if match:
             return match.group(1)
-        logger.warning(f"No number found between underscore and dot in filename: {filename}")
+        logger.warning(f"No number found between underscore/dot and extension in filename: {filename}")
         return None
 
     @staticmethod
-    def parse_json(json_data: List[Dict]) -> Dict[str, np.ndarray]:
+    def parse_json(json_data: List[Dict], parse_by_image_number: bool = False) -> Dict[str, np.ndarray]:
         """Parse the Label Studio JSON format into image_name: mask pairs"""
         masks = {}
         logger.info(f"Processing {len(json_data)} total instances from Label Studio JSON")
@@ -31,7 +34,10 @@ class LabelParser:
         for item in json_data:
             # Get the file upload name and convert to tiff format
             file_upload = item['file_upload']
-            tiff_name = LabelParser._get_image_number(file_upload)
+            if parse_by_image_number:
+                tiff_name = LabelParser._get_image_number(file_upload)
+            else:
+                tiff_name = file_upload
             
             if not tiff_name or not item.get('annotations'):
                 continue
